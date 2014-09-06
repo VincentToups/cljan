@@ -16,7 +16,7 @@
   (fn [state]
     [(-> state
          :components
-         (get ,, id)
+         id
          (#(not= % nil)))
      state]))
 
@@ -45,7 +45,7 @@
   [name maker]
   (fn [state]
     (let [components (:components state)]
-      [name (assoc state :components (assoc components name {:name name}))])))
+      [name (assoc state :components (assoc components name {:name name :maker maker}))])))
 
 (defn component? [id]
   (fn [state]
@@ -66,7 +66,9 @@
     (let [systems (:systems state)]
       [name (assoc state :systems
                    (assoc systems name
-                          (assoc behaviors :entity-group [])))])))
+                          (assoc behaviors 
+                            :components (set components)
+                            :entity-group [])))])))
 
 (defn components?
   ([]
@@ -100,5 +102,39 @@
   (state-do
    [:bind id next-id]
    [:bind entities (state-get :entities)]
-   (state-assoc :entities (assoc entities id {}))
+   (state-assoc :entities (assoc entities id {:component-ids #{} :components {}}))
    (state-return id)))
+
+(defn make-component [id args]
+  (fn [state]
+    (apply (-> state :components id :maker)
+     args)))
+
+(defn get-ent [id]
+  (fn [state]
+    [(-> state :entities id) state]))
+
+(defn set-ent [id new-val]
+  (fn [state]
+    [id (let [entities (-> state :entities)
+              new-entities (assoc entities id new-val)]
+          (assoc state :entities new-entities))]))
+
+
+
+(defn update-systems-with-ent [ent]
+  (state-do 
+   []))
+
+(defn add-component-raw [entid component-id & args]
+  (state-if (component-id? component-id)
+   (state-do 
+    [:bind component (make-component component-id args)]
+    [:bind ent (get-ent entid)]
+    [:let 
+     components (:components ent)
+     component-ids (:component-ids ent)]
+    (set-ent entid (assoc ent 
+                     :component-ids (conj component-ids component-id)
+                     :components (assoc components component-id component))))
+   (throw (Throwable. (format "Could not add component ~a to entity." component-id)))))

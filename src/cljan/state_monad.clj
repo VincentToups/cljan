@@ -16,6 +16,11 @@
 (defmacro state-do [& forms]
   (match (into [] forms)
          [last-form] last-form
+         [[:ifm expr true-branch false-branch] & rest]
+         `(state-bind ~expr (fn [x#]
+                              (if x# 
+                                true-branch
+                                false-branch)))
          [[:bind pattern expr] & rest]
          `(state-bind ~expr (fn [~pattern]
                               (state-do ~@rest)))
@@ -26,6 +31,12 @@
          [expr & rest]
          `(state-bind ~expr (fn [y#]
                               (state-do ~@rest)))))
+
+(defmacro state-if [expr true-branch false-branch]
+  `(state-bind ~expr (fn [x#]
+                              (if x# 
+                                true-branch
+                                false-branch))))
 
 (defn state-assoc [key val]
   (fn [state]
@@ -41,3 +52,27 @@
 (defn set-state [new-state]
   (fn [old-state]
     [new-state new-state]))
+
+(defmacro defstatefn [name args & body]
+  `(defn ~name ~args (state-do ~@body)))
+
+(defn state-map [f collection]
+  (fn [state]
+    (loop [result []
+           state state
+           collection collection]
+      (match collection 
+             [] [result state]
+             [first & rest]
+             (let [[val state] ((f first) state)]
+               (recur (conj result val)
+                      state
+                      rest))))))
+
+((state-map (fn [x] (state-do 
+                     (state-assoc :last-x x)
+                     (state-return 
+                      (+ x 1)))) 
+            [1 2 3]) 
+ {})
+
