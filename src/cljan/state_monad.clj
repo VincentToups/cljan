@@ -14,12 +14,12 @@
       ((mf value) new-state))))
 
 (defmacro state-do [& forms]
-  (match (into [] forms) 
+  (match (into [] forms)
          [last-form] last-form
-         [[:bind pattern expr] & rest] 
+         [[:bind pattern expr] & rest]
          `(state-bind ~expr (fn [~pattern]
                               (state-do ~@rest)))
-         [[:aside & aside-rest] & rest] 
+         [[:aside & aside-rest] & rest]
          `(do ~@aside-rest (state-do ~@rest))
          [[:let & let-forms] & rest]
          `(let ,let-forms (state-do ~@rest))
@@ -41,6 +41,3 @@
 (defn set-state [new-state]
   (fn [old-state]
     [new-state new-state]))
-
-
-

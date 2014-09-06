@@ -4,71 +4,94 @@
 
 (deftest test-constructing-new-cljan
   (testing "Test creating a new cljan."
-    (is (= 
-         {:components {}
-          :systems {}
-          :entities []}
+    (is (=
+         {:components     {}
+          :systems        {}
+          :entities       {}
+          :entity-id-counter 0}
          (make-cljan)))))
 
-(deftest test-component-detection 
+(deftest test-component-detection
   (testing "The creation and look up of components"
-    (is (= false 
-           (run-cljan* 
+    (is (= false
+           (run-cljan*
             (component :c1 (fn [a] a))
             (component? :c2))))
-    (is (= true 
-           (run-cljan* 
+    (is (= true
+           (run-cljan*
             (component :c1 (fn [a] a))
             (component? :c1))))
-    (is (= false 
-           (run-cljan* 
+    (is (= false
+           (run-cljan*
             (component :c1 (fn [a] a))
             (component :c2 (fn [a] a))
             (components? :c1 :c2 :c3))))
-    (is (= true 
-           (run-cljan* 
+    (is (= true
+           (run-cljan*
             (component :c1 (fn [a] a))
             (component :c2 (fn [a] a))
             (components? :c1 :c2))))))
 
-(deftest test-component-creation 
+(deftest test-component-creation
   (testing "The creation of components and their retrieval."
-    (is (= (-> (run-cljan 
+    (is (= (-> (run-cljan
                 (component :c1 (fn [a] a)))
                second
-               :components) 
+               :components)
            {:c1 {:name :c1}}))
-    (is (= (-> (run-cljan 
+    (is (= (-> (run-cljan
                 (component :c1 (fn [a] a))
                 (component :c2 (fn [b] b)))
                second
-               :components) 
+               :components)
            {:c1 {:name :c1}
             :c2 {:name :c2}}))))
 
-(deftest test-system-creation 
+
+(deftest test-entity-creation
+  (testing "The creation of entities and their retrieval."
+    (is (= (-> (run-cljan (entity))
+               second
+               :entities
+               count)
+           1))
+    (is (= (-> (run-cljan (entity)
+                          (entity)
+                          (entity)
+                          (entity))
+               second
+               :entities
+               count)
+           4))
+    ;; (is (= (:entities (run-cljan*
+    ;;                    (entity)))
+    ;;        {0 {}}))
+
+    ))
+
+(deftest test-system-creation
   (testing "Test creation of systems."
-    (is (let [f (fn [a] a)] 
-          (= (-> (run-cljan 
+    (is (let [f (fn [a] a)]
+          (= (-> (run-cljan
                   (component :c1 (fn [a] a))
                   (component :c2 (fn [b] b))
-                  (system :s1 [:c1 :c2] 
+                  (system :s1 [:c1 :c2]
                           {
                            :every f
                            }))
                  second
-                 :systems 
+                 :systems
                  {:s1 {:components [:c1 :c2]
                        :every f
                        }}))))))
 
 
-;; (deftest ecs-test-1 
+;; (deftest ecs-test-1
 ;;   (testing "Test entities, components, systems."
-;;     (let [{:keys [components systems entities]} 
-;;           (run-cljan 
+;;     (let [{:keys [components systems entities]}
+;;           (run-cljan
 ;;            [health (component (fn [amt] amt))
-;;             _ (system :components [health] 
+;;             _ (system :components [health]
 ;;                       :every (fn [amt ent]
 ;;                                (if (< amt 0)
 ;;                                  (delete ent)
@@ -81,10 +104,10 @@
 
 ;; (deftest run-systems-test-1
 ;;   (testing "Test the implications of running one system."
-;;     (let [{:keys [components systems entities]} 
-;;           (run-cljan 
+;;     (let [{:keys [components systems entities]}
+;;           (run-cljan
 ;;            [health (component (fn [amt] amt))
-;;             _ (system :components [health] 
+;;             _ (system :components [health]
 ;;                       :every (fn [amt ent]
 ;;                                (if (< amt 0)
 ;;                                  (delete ent)
