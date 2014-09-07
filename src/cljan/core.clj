@@ -5,7 +5,11 @@
 
 ;;; private interface
 
-(defn- next-id [state]
+(defn- next-id 
+  "Returns the next ID to use for tagging entities.  Since each entity
+  created by the system has a unique identifier, this is useful for
+  creating them."
+  [state]
   (let [current-counter (:entity-id-counter state)]
     [current-counter
      (assoc state
@@ -13,24 +17,20 @@
 
 ;;; public interface
 
-(defn component [id]
-  (fn [state]
-    [(-> state
-         :components
-         id
-         (#(not= % nil)))
-     state]))
-
-(defn make-cljan []
+(defn make-cljan 
+  "Create an empty cljan-universe." []
   {:components     {}
    :systems        {}
    :entities       {}
    :entity-id-counter 0})
 
-(defmacro run-cljan [& body]
+(defmacro run-cljan 
+  "Given a cljan function, which is a function in the state monad which operates on a cljan state, execute that function and return two element list of [monadic-retval, final-state]. Cljan programs are large functions in the state monad, and this form executes such a function."
+  [& body]
   `((state-do ~@body) (make-cljan)))
 
 (defmacro run-cljan* [& body]
+  "Identical to run-cljan, except it discards the final state and returns only the monadic return value."
   `(first (run-cljan ~@body )))
 
 (defn delete [ent]
@@ -49,6 +49,7 @@
       [name (assoc state :components (assoc components name {:name name :maker maker}))])))
 
 (defn component? [id]
+  "Returns TRUE when ID is a component id in the cljan universe STATE."
   (fn [state]
     [(-> state
          :components
@@ -72,6 +73,7 @@
                             :entity-group #{})))])))
 
 (defn components?
+  "Allows testing for multiple components existence."
   ([]
      (state-return true))
   ([first & rest]
@@ -177,7 +179,10 @@
    (state-return (entities ent-id))))
 
 (defn handle-systems-for-entity [ent-id]
-  (state-do
+  "Given an entity ID, this function iterates through the systems and
+  adds the entity to systems which match the components of the entity."
+  (state-do 
+
    [:bind ent (get-ent ent-id)]
    [:let ent-component-ids (:component-ids ent)]
    [:bind systems (state-get :systems)]
@@ -188,7 +193,14 @@
         (state-return nil))) (keys systems))))
 
 (defn add-component-raw [entid component-id & args]
-  (state-if
+  "Given an ENTID, a COMPONENT-ID and ARGS to be passed to the
+  component constructor, this function adds that component to the
+  entity.  
+
+Adding components to entities is fundamental the functionality of
+cljan, since it is how all entities define their behavior."
+  (state-if 
+
    (component? component-id)
    (state-do
     [:bind component (apply make-component component-id args)]
@@ -202,6 +214,8 @@
    (throw (Throwable. (format "Could not add component ~a to entity." component-id)))))
 
 (defn add-component [entid component-id & args]
+  "This function adds a component instance to an entity and assures
+  that the entity joins the appropriate systems."
   (state-do
    (apply add-component-raw entid component-id args)
    (handle-systems-for-entity entid)))
@@ -242,3 +256,5 @@
           (remove-entity-from-system entity-id system-key))
         (state-return nil)))
     (keys systems))))
+
+
