@@ -1,6 +1,7 @@
 (ns cljan.core
   (:require [clojure.core.typed :as t]
-            [cljan.state-monad :refer :all]))
+            [cljan.state-monad :refer :all]
+            [clojure.set :refer [subset?]]))
 
 ;;; private interface
 
@@ -68,7 +69,7 @@
                    (assoc systems name
                           (assoc behaviors 
                             :components (set components)
-                            :entity-group [])))])))
+                            :entity-group #{})))])))
 
 (defn components?
   ([]
@@ -105,31 +106,83 @@
    (state-assoc :entities (assoc entities id {:component-ids #{} :components {}}))
    (state-return id)))
 
-(defn make-component [id args]
+(defn make-component [id & args]
+  "Produce an instance of a component with ID, by passing args"
   (fn [state]
-    (apply (-> state :components id :maker)
-     args)))
+    [(apply 
+      (-> state :components id :maker)
+      args)
+     state]))
 
 (defn get-ent [id]
+  "Given an entity ID, fetches the actual entity.  The player probably
+  should never see the actual entity data, but this function is useful
+  for internal use and special circumstances."
   (fn [state]
     [(-> state :entities id) state]))
 
 (defn set-ent [id new-val]
+  "Update an entity at ID with a new-value NEW-VAL.  Again, since the
+  entity must have certain information associated with it, the use of
+  the library probably will not use this method directly."
   (fn [state]
     [id (let [entities (-> state :entities)
               new-entities (assoc entities id new-val)]
           (assoc state :entities new-entities))]))
 
-
-
 (defn update-systems-with-ent [ent]
   (state-do 
    []))
 
+(defn set-entity-group-index [system-id value]
+  (state-do 
+   [:bind system (state-get :systems system-id)]
+   (state-assoc :systems (assoc system :index value))))
+
+(defn incr-entity-group-index [system-id]
+  (state-do 
+   [:bind system (state-get :systems system-id)]
+   (state-assoc :systems (assoc system :index (inc (:index system))))))
+
+(defn decr-entity-group-index [system-id]
+  (state-do 
+   [:bind system (state-get :systems system-id)]
+   (state-assoc :systems (assoc system :index (dec (:index system))))))
+
+(defn system-execute-every [system-id]
+  (state-do 
+   [:bind entity-group (state-get :systems system-id :entity-group)]
+   (state-assoc-in [:system system-id :blacklist []])
+   (state-assoc :currently-updating-system system-id)
+   ()))
+
+(defn add-entity-to-system [ent-id system-id]
+  (state-do 
+   [:bind system (state-get :systems system-id)]
+   (state-assoc-in [:systems system-id]
+                   (assoc system :entity-group (conj (:entity-group system) ent-id)))))
+
+(defn get-ent [ent-id]
+  (state-do 
+   [:bind entities (state-get :entities)]
+   (state-return (entities ent-id))))
+
+(defn handle-systems-for-entity [ent-id]
+  (state-do 
+   [:bind ent (get-ent ent-id)]
+   [:let ent-component-ids (:component-ids ent)]
+   [:bind systems (state-get :systems)]
+   (state-map 
+    (fn [system-key]
+      (if (subset? (-> systems system-key :components) ent-component-ids)
+        (state-do (add-entity-to-system ent-id system-key))
+        (state-return nil))) (keys systems))))
+
 (defn add-component-raw [entid component-id & args]
-  (state-if (component-id? component-id)
+  (state-if 
+   (component? component-id)
    (state-do 
-    [:bind component (make-component component-id args)]
+    [:bind component (apply make-component component-id args)]
     [:bind ent (get-ent entid)]
     [:let 
      components (:components ent)
@@ -138,3 +191,30 @@
                      :component-ids (conj component-ids component-id)
                      :components (assoc components component-id component))))
    (throw (Throwable. (format "Could not add component ~a to entity." component-id)))))
+
+(defn add-component [entid component-id & args]
+  (state-do 
+   (apply add-component-raw entid component-id args)
+   (handle-systems-for-entity entid)))
+
+(defn remove-component 
+  "Removes a component with a given COMPONENT-ID from an entity with a
+  given ENTITY-ID. This is useful in order to modify entities. For
+  example, making an entity mortal by adding health."
+  [entity-id component-id]
+  (state-do 
+   [:bind entity (get-ent entity)]
+   (state-return (entities ent-id))))
+
+(run-cljan
+ (component :c1 identity)
+ (component :c2 identity)
+ (system :s1 [:c1 :c2]
+         {
+          :every identity
+          })
+ [:bind e1 (entity)]
+ (component? :c1)
+ (add-component e1 :c1 10)
+ (add-component e1 :c2 34)
+ extract-state)

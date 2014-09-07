@@ -27,24 +27,35 @@
          [[:aside & aside-rest] & rest]
          `(do ~@aside-rest (state-do ~@rest))
          [[:let & let-forms] & rest]
-         `(let ,let-forms (state-do ~@rest))
+         `(let ~let-forms (state-do ~@rest))
          [expr & rest]
          `(state-bind ~expr (fn [y#]
                               (state-do ~@rest)))))
 
 (defmacro state-if [expr true-branch false-branch]
   `(state-bind ~expr (fn [x#]
+                       (println x#)
                               (if x# 
-                                true-branch
-                                false-branch))))
+                                ~true-branch
+                                ~false-branch))))
 
 (defn state-assoc [key val]
   (fn [state]
     [val (assoc state key val)]))
 
-(defn state-get [key]
+(defn state-assoc-in [keys val]
   (fn [state]
-    [(key state) state]))
+    [val (assoc-in state keys val)]))
+
+(defn state-get [& keys]
+  (fn [state]
+    [(loop [val state
+            keys keys]
+       (if (or (empty? keys) (nil? val)) 
+         val
+         (recur ((first keys) val)
+                (rest keys)))) 
+     state]))
 
 (defn extract-state [state]
   [state state])
@@ -61,18 +72,11 @@
     (loop [result []
            state state
            collection collection]
-      (match collection 
-             [] [result state]
-             [first & rest]
+      (match [collection] 
+             [([] :seq)] [result state]
+             [([first & rest] :seq)]
              (let [[val state] ((f first) state)]
                (recur (conj result val)
                       state
                       rest))))))
-
-((state-map (fn [x] (state-do 
-                     (state-assoc :last-x x)
-                     (state-return 
-                      (+ x 1)))) 
-            [1 2 3]) 
- {})
 

@@ -1,6 +1,7 @@
 (ns cljan.core-test
   (:require [clojure.test :refer :all]
-            [cljan.core :refer :all]))
+            [cljan.core :refer :all]
+            [cljan.state-monad :refer :all]))
 
 (deftest test-constructing-new-cljan
   (testing "Test creating a new cljan."
@@ -37,16 +38,17 @@
     (is (= (-> (run-cljan
                 (component :c1 (fn [a] a)))
                second
-               :components)
-           {:c1 {:name :c1}}))
+               :components
+               :c1 :name)
+           :c1))
     (is (= (-> (run-cljan
                 (component :c1 (fn [a] a))
                 (component :c2 (fn [b] b)))
                second
-               :components)
-           {:c1 {:name :c1}
-            :c2 {:name :c2}}))))
-
+               :components
+               keys
+               sort)
+           [:c1 :c2]))))
 
 (deftest test-entity-creation
   (testing "The creation of entities and their retrieval."
@@ -84,6 +86,64 @@
                  {:s1 {:components [:c1 :c2]
                        :every f
                        }}))))))
+
+(deftest test-entities-added-to-appropriate-systems
+  (testing "Test that entities are added to the right systems when components are added."
+    (is (= (-> (run-cljan
+                (component :c1 identity)
+                (component :c2 identity)
+                (system :s1 [:c1 :c2]
+                        {
+                         :every identity
+                         })
+                [:bind e1 (entity)]
+                (add-component e1 :c1 10)
+                (add-component e1 :c2 34)
+                extract-state)
+               second
+               :systems
+               :s1
+               :entity-group)
+           #{0}
+           ))
+    (is (= (-> (run-cljan
+                (component :c1 identity)
+                (component :c2 identity)
+                (component :c3 identity)
+                (system :s1 [:c1 :c2]
+                        {
+                         :every identity
+                         })
+                [:bind e1 (entity)]
+                (add-component e1 :c1 10)
+                (add-component e1 :c2 34)
+                (add-component e1 :c3 0)
+                extract-state)
+               second
+               :systems
+               :s1
+               :entity-group)
+           #{0}
+           ))))
+
+(deftest test-entities-are-not-added-to-systems-they-dont-want-to-be-in
+  (testing "Test that entities are not erroneously put into non-matching systems"
+    (is (= (-> (run-cljan
+                (component :c1 identity)
+                (component :c2 identity)
+                (system :s1 [:c1 :c2]
+                        {
+                         :every identity
+                         })
+                [:bind e1 (entity)]
+                (add-component e1 :c1 10)
+                extract-state)
+               second
+               :systems
+               :s1
+               :entity-group)
+           #{}
+           ))))
 
 
 ;; (deftest ecs-test-1
