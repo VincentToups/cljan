@@ -11,8 +11,17 @@
              [:aside (println state)]
              (state-assoc :y 11)
              [:bind state extract-state]
-             [:aside (println state hello)]
+             [:aside (println state)]
              (state-get :x)) (hash-map))))))
+
+(deftest map-test
+  (testing "Test the functionality of map in the state monad."
+    (is (= [[2 3 4] {:last-x 3}]
+           ((state-map (fn [x]
+                         (state-do
+                          (state-assoc :last-x x)
+                          (state-return (+ x 1))))
+                       [1 2 3]) {})))))
 
 
 
