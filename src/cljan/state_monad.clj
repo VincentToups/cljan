@@ -18,7 +18,7 @@
          [last-form] last-form
          [[:ifm expr true-branch false-branch] & rest]
          `(state-bind ~expr (fn [x#]
-                              (if x# 
+                              (if x#
                                 true-branch
                                 false-branch)))
          [[:bind pattern expr] & rest]
@@ -33,11 +33,11 @@
                               (state-do ~@rest)))))
 
 (defmacro state-if [expr true-branch false-branch]
-  `(state-bind ~expr (fn [x#]
-                       (println x#)
-                              (if x# 
-                                ~true-branch
-                                ~false-branch))))
+  `(state-bind ~expr
+               (fn [x#]
+                 (if x#
+                   ~true-branch
+                   ~false-branch))))
 
 (defn state-assoc [key val]
   (fn [state]
@@ -51,10 +51,10 @@
   (fn [state]
     [(loop [val state
             keys keys]
-       (if (or (empty? keys) (nil? val)) 
+       (if (or (empty? keys) (nil? val))
          val
          (recur ((first keys) val)
-                (rest keys)))) 
+                (rest keys))))
      state]))
 
 (defn extract-state [state]
@@ -72,11 +72,10 @@
     (loop [result []
            state state
            collection collection]
-      (match [collection] 
+      (match [collection]
              [([] :seq)] [result state]
              [([first & rest] :seq)]
              (let [[val state] ((f first) state)]
                (recur (conj result val)
                       state
                       rest))))))
-
