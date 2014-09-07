@@ -67,7 +67,7 @@
     (let [systems (:systems state)]
       [name (assoc state :systems
                    (assoc systems name
-                          (assoc behaviors 
+                          (assoc behaviors
                             :components (set components)
                             :entity-group #{})))])))
 
@@ -109,7 +109,7 @@
 (defn make-component [id & args]
   "Produce an instance of a component with ID, by passing args"
   (fn [state]
-    [(apply 
+    [(apply
       (-> state :components id :maker)
       args)
      state]))
@@ -131,90 +131,114 @@
           (assoc state :entities new-entities))]))
 
 (defn update-systems-with-ent [ent]
-  (state-do 
+  (state-do
    []))
 
 (defn set-entity-group-index [system-id value]
-  (state-do 
+  (state-do
    [:bind system (state-get :systems system-id)]
    (state-assoc :systems (assoc system :index value))))
 
 (defn incr-entity-group-index [system-id]
-  (state-do 
+  (state-do
    [:bind system (state-get :systems system-id)]
    (state-assoc :systems (assoc system :index (inc (:index system))))))
 
 (defn decr-entity-group-index [system-id]
-  (state-do 
+  (state-do
    [:bind system (state-get :systems system-id)]
    (state-assoc :systems (assoc system :index (dec (:index system))))))
 
 (defn system-execute-every [system-id]
-  (state-do 
+  (state-do
    [:bind entity-group (state-get :systems system-id :entity-group)]
    (state-assoc-in [:system system-id :blacklist []])
    (state-assoc :currently-updating-system system-id)
    ()))
 
-(defn add-entity-to-system [ent-id system-id]
-  (state-do 
+(defn apply-entity-to-system [a-fn entity-id system-id]
+  (state-do
    [:bind system (state-get :systems system-id)]
    (state-assoc-in [:systems system-id]
-                   (assoc system :entity-group (conj (:entity-group system) ent-id)))))
+                   (assoc system
+                     :entity-group (-> system
+                                       :entity-group
+                                       (a-fn entity-id))))))
+
+(defn add-entity-to-system [entity-id system-id]
+  (apply-entity-to-system conj entity-id system-id))
+
+(defn remove-entity-from-system [entity-id system-id]
+  (apply-entity-to-system disj entity-id system-id))
 
 (defn get-ent [ent-id]
-  (state-do 
+  (state-do
    [:bind entities (state-get :entities)]
    (state-return (entities ent-id))))
 
 (defn handle-systems-for-entity [ent-id]
-  (state-do 
+  (state-do
    [:bind ent (get-ent ent-id)]
    [:let ent-component-ids (:component-ids ent)]
    [:bind systems (state-get :systems)]
-   (state-map 
+   (state-map
     (fn [system-key]
       (if (subset? (-> systems system-key :components) ent-component-ids)
-        (state-do (add-entity-to-system ent-id system-key))
+        (add-entity-to-system ent-id system-key)
         (state-return nil))) (keys systems))))
 
 (defn add-component-raw [entid component-id & args]
-  (state-if 
+  (state-if
    (component? component-id)
-   (state-do 
+   (state-do
     [:bind component (apply make-component component-id args)]
     [:bind ent (get-ent entid)]
-    [:let 
+    [:let
      components (:components ent)
      component-ids (:component-ids ent)]
-    (set-ent entid (assoc ent 
+    (set-ent entid (assoc ent
                      :component-ids (conj component-ids component-id)
                      :components (assoc components component-id component))))
    (throw (Throwable. (format "Could not add component ~a to entity." component-id)))))
 
 (defn add-component [entid component-id & args]
-  (state-do 
+  (state-do
    (apply add-component-raw entid component-id args)
    (handle-systems-for-entity entid)))
 
-(defn remove-component 
+(defn- remove-component-from-entity
+  "Auxiliary function that makes remove-component easier on the eyes. Provides a
+  new ENTITY without the COMPONENT-ID removed from the correct places."
+  [entity component-id]
+  (assoc entity
+    :component-ids (-> entity
+                       :component-ids
+                       (disj component-id))
+    :components    (-> entity
+                       :components
+                       (dissoc component-id))))
+
+(defn remove-component
   "Removes a component with a given COMPONENT-ID from an entity with a
   given ENTITY-ID. This is useful in order to modify entities. For
   example, making an entity mortal by adding health."
   [entity-id component-id]
-  (state-do 
-   [:bind entity (get-ent entity)]
-   (state-return (entities ent-id))))
-
-(run-cljan
- (component :c1 identity)
- (component :c2 identity)
- (system :s1 [:c1 :c2]
-         {
-          :every identity
-          })
- [:bind e1 (entity)]
- (component? :c1)
- (add-component e1 :c1 10)
- (add-component e1 :c2 34)
- extract-state)
+  (state-do
+   [:bind entity (get-ent entity-id)]
+   (set-ent entity-id
+            (remove-component-from-entity entity component-id))
+   [:bind new-entity (get-ent entity-id)]
+   [:let  new-component-ids (:component-ids new-entity)]
+   [:bind systems (state-get :systems)]
+   (state-map
+    (fn [system-key]
+      (if (-> systems
+              system-key
+              :entity-group
+              (contains? ,, entity-id))
+        (if (subset? (-> systems system-key :components)
+                     new-component-ids)
+          (state-return nil) ;; entity should still be in this system.
+          (remove-entity-from-system entity-id system-key))
+        (state-return nil)))
+    (keys systems))))

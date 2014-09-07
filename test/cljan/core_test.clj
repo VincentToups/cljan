@@ -3,6 +3,44 @@
             [cljan.core :refer :all]
             [cljan.state-monad :refer :all]))
 
+(deftest removing-component-from-entity
+  (testing "If the component is removed from the members of an entity"
+    (is (= (@#'cljan.core/remove-component-from-entity
+            {:component-ids #{:c2 :c1}
+             :components    {:c2 34 :c1 10}}
+            :c2)
+           {:component-ids #{:c1}
+            :components    {:c1 10}})))
+  (testing "removing a component from a entity without components."
+    (let [state (second (run-cljan
+                         (component :c1 identity)
+                         (system :s1 [:c1]
+                                 {
+                                  :every identity
+                                  })
+                         [:bind e1 (entity)]
+                         (remove-component e1 :c1)))]
+      (is (= (:entities state)
+             {0 {:component-ids #{}, :components {}}}))
+      (is (= (-> state :systems :s1 :entity-group)
+             #{}))))
+  (testing "Removing a component from an entity that would make the entity fall out of a system."
+    (let [state (-> (run-cljan
+                     (component :c1 identity)
+                     (component :c2 identity)
+                     (component :c3 identity)
+                     (system :s1 [:c1 :c2]
+                             {
+                              :every identity
+                              })
+                     [:bind e1 (entity)]
+                     (add-component e1 :c1 10)
+                     (add-component e1 :c2 34)
+                     (remove-component e1 :c2))
+                    second)]
+      (is (= (-> state :systems :s1 :entity-group)
+             #{})))))
+
 (deftest test-constructing-new-cljan
   (testing "Test creating a new cljan."
     (is (=
@@ -104,8 +142,7 @@
                :systems
                :s1
                :entity-group)
-           #{0}
-           ))
+           #{0}))
     (is (= (-> (run-cljan
                 (component :c1 identity)
                 (component :c2 identity)
@@ -123,8 +160,7 @@
                :systems
                :s1
                :entity-group)
-           #{0}
-           ))))
+           #{0}))))
 
 (deftest test-entities-are-not-added-to-systems-they-dont-want-to-be-in
   (testing "Test that entities are not erroneously put into non-matching systems"
