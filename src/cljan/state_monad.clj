@@ -1,9 +1,9 @@
 (ns cljan.state-monad
-  (:require [clojure.core.typed :refer [ann All HVec U Any Map Seq Coll Option]
-             :as typed]
+  (:require [clojure.core.typed :refer [ann All HVec Any Map Coll Option]
+             :as t]
             [clojure.core.match :refer [match]]))
 
-(t/ann state-return (All [X Y] [X -> [Y -> (HVec [X Y])]]))
+(ann state-return (All [X Y] [X -> [Y -> (HVec [X Y])]]))
 (defn state-return [x]
   (fn [state]
     [x state]))
@@ -64,36 +64,42 @@
   (fn [state]
     [val (assoc-in state keys val)]))
 
-(ann state-get
-     [Any *
-      ->
-      [(U (Option (clojure.lang.ILookup Any Any)) Any)
-       ->
-       (HVec [(Option Any)
-              (U (Option (clojure.lang.ILookup Any Any)) Any)])]])
+(ann get-from-state
+     [(Option (Map Any Any))
+      (Option (Coll Any)) -> (Option Any)])
+(defn- get-from-state
+  "Auxiliary function to make `state-get` easier to understand and type."
+  [state keys]
+  (t/loop [acc  :- (Option Any) nil
+           keys :- (Option (Coll Any)) keys]
+    (if-not (or state (seq keys))
+      acc
+      (recur (get state (first keys))
+             (rest keys)))))
 
+(ann state-get
+     [Any * -> [(Option (Map Any Any)) ->
+                (HVec [(Option Any) (Option (Map Any Any))])]])
 (defn state-get [& keys]
   (fn [state]
-    [(typed/loop [val  :- (U (Option (clojure.lang.ILookup Any Any)) Any)
-                  ,  state
-                  keys :- (Option (typed/I (typed/CountRange 1)
-                                           (typed/HSeq (Any *))))
-                  , keys]
-       (if (or (empty? keys) (nil? val))
-         val
-         (recur (get val (first keys))
-                (rest keys))))
+    [(get-from-state state keys)
      state]))
 
-;; (defn extract-state [state]
-;;   [state state])
+(ann extract-state
+     (All [state]
+          [state -> (HVec [state state])]))
+(defn extract-state [state]
+  [state state])
 
-;; (defn set-state [new-state]
-;;   (fn [old-state]
-;;     [new-state new-state]))
+(ann set-state
+     (All [state]
+          [state -> [state -> (HVec [state state])]]))
+(defn set-state [new-state]
+  (fn [old-state]
+    [new-state new-state]))
 
-;; (defmacro defstatefn [name args & body]
-;;   `(defn ~name ~args (state-do ~@body)))
+(defmacro defstatefn [name args & body]
+  `(defn ~name ~args (state-do ~@body)))
 
 ;; (defn state-map [f collection]
 ;;   (fn [state]
