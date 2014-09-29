@@ -13,6 +13,7 @@
                [X -> [State -> (t/HVec [Y State])]]
                ->
                [State -> (t/HVec [Y State])]]))
+
 (defn state-bind [mv mf]
   (fn [state]
     (let [[value new-state] (mv state)]
@@ -26,9 +27,12 @@
                               (if x#
                                 true-branch
                                 false-branch)))
-         [[:bind pattern expr] & rest]
-         `(state-bind ~expr (fn [~pattern]
-                              (state-do ~@rest)))
+         [[:bind pattern expr & rest-bind] & rest]
+         (if (or (empty? rest-bind) (nil? rest-bind))
+           `(state-bind ~expr (fn [~pattern]
+                                (state-do ~@rest)))
+           `(state-bind ~expr (fn [~pattern]
+                                (state-do [:bind ~@rest-bind] ~@rest))))
          [[:aside & aside-rest] & rest]
          `(do ~@aside-rest (state-do ~@rest))
          [[:let & let-forms] & rest]
@@ -53,39 +57,39 @@
     [val
      (assoc state key val)]))
 
-;; (defn state-assoc-in [keys val]
-;;   (fn [state]
-;;     [val (assoc-in state keys val)]))
+(defn state-assoc-in [keys val]
+  (fn [state]
+    [val (assoc-in state keys val)]))
 
-;; (defn state-get [& keys]
-;;   (fn [state]
-;;     [(loop [val state
-;;             keys keys]
-;;        (if (or (empty? keys) (nil? val))
-;;          val
-;;          (recur ((first keys) val)
-;;                 (rest keys))))
-;;      state]))
+(defn state-get [& keys]
+  (fn [state]
+    [(loop [val state
+            keys keys]
+       (if (or (empty? keys) (nil? val))
+         val
+         (recur ((first keys) val)
+                (rest keys))))
+     state]))
 
-;; (defn extract-state [state]
-;;   [state state])
+(defn extract-state [state]
+  [state state])
 
-;; (defn set-state [new-state]
-;;   (fn [old-state]
-;;     [new-state new-state]))
+(defn set-state [new-state]
+  (fn [old-state]
+    [new-state new-state]))
 
-;; (defmacro defstatefn [name args & body]
-;;   `(defn ~name ~args (state-do ~@body)))
+(defmacro defstatefn [name args & body]
+  `(defn ~name ~args (state-do ~@body)))
 
-;; (defn state-map [f collection]
-;;   (fn [state]
-;;     (loop [result []
-;;            state state
-;;            collection collection]
-;;       (match [collection]
-;;              [([] :seq)] [result state]
-;;              [([first & rest] :seq)]
-;;              (let [[val state] ((f first) state)]
-;;                (recur (conj result val)
-;;                       state
-;;                       rest))))))
+(defn state-map [f collection]
+  (fn [state]
+    (loop [result []
+           state state
+           collection collection]
+      (match [collection]
+             [([] :seq)] [result state]
+             [([first & rest] :seq)]
+             (let [[val state] ((f first) state)]
+               (recur (conj result val)
+                      state
+                      rest))))))

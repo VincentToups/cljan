@@ -14,6 +14,16 @@
              [:aside (println state)]
              (state-get :x)) (hash-map))))))
 
+(deftest multibind-test
+  (testing "Whether one can put multiple monadic bindings into a single bind form."
+    (is (= [21 {:x 10 :y 11}]
+           ((state-do
+             [:bind 
+              x (state-get :x)
+              y (state-get :y)]
+             (state-return (+ x y))) 
+            {:x 10 :y 11})))))
+
 (deftest map-test
   (testing "Test the functionality of map in the state monad."
     (is (= [[2 3 4] {:last-x 3}]
@@ -23,10 +33,7 @@
                           (state-return (+ x 1))))
                        [1 2 3]) {})))))
 
-
-
 (run-tests)
-
 
 
 
