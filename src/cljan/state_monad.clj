@@ -67,7 +67,7 @@
             keys keys]
        (if (or (empty? keys) (nil? val))
          val
-         (recur ((first keys) val)
+         (recur (val (first keys))
                 (rest keys))))
      state]))
 
@@ -81,15 +81,48 @@
 (defmacro defstatefn [name args & body]
   `(defn ~name ~args (state-do ~@body)))
 
-(defn state-map [f collection]
+(defn state-reduce 
+  "Using F, a state-function which takes an accumulator and an item, reduce
+  the sequence COLLECTION starting with the initial value INIT."
+  [f collection init]
+  (fn [state]
+    (loop [result init
+           state state
+           collection collection]
+      (cond 
+       (empty? collection) [result state]
+       :otherwise 
+       (let [first (first collection)
+             rest (rest collection)
+             [new-result new-state] ((f result first) state)]
+         (recur new-result new-state rest))))))
+
+(defn state-for-each
+  "For each item in collection, call the state-function F on the item."
+  [f collection]
+  (fn [state]
+    (loop [state state
+           collection collection]
+      (cond 
+       (empty? collection) [nil state]
+       :otherwise 
+       (let [first (first collection)
+             rest (rest collection)
+             [ignored new-state] ((f first) state)]
+         (recur new-state rest))))))
+
+(defn state-map 
+  "Map F, a state-function, across the sequence COLLECTION and return
+  a COLLECTION of the results."
+  [f collection]
   (fn [state]
     (loop [result []
            state state
            collection collection]
-      (match [collection]
-             [([] :seq)] [result state]
-             [([first & rest] :seq)]
-             (let [[val state] ((f first) state)]
-               (recur (conj result val)
-                      state
-                      rest))))))
+      (cond 
+       (empty? collection) [result state]
+       :otherwise 
+       (let [first (first collection)
+             rest (rest collection)
+             [val new-state] ((f first) state)]
+         (recur (conj result val) new-state rest))))))

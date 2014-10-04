@@ -3,6 +3,50 @@
             [cljan.core :refer :all]
             [cljan.state-monad :refer :all]))
 
+(deftest test-system-deltas 
+  (testing "entering a system with one component"
+    (is (= {:s1 :entering} (first 
+               (run-cljan
+                (component :c1 identity)
+                (component :c2 identity)
+                (system :s1 [:c1]
+                        {
+                         :every identity
+                         })
+                (system-deltas #{} #{:c1})))))
+    (is (= {:s1 :entering} (first 
+                            (run-cljan
+                             (component :c1 identity)
+                             (component :c2 identity)
+                             (system :s1 [:c1]
+                                     {
+                                      :every identity
+                                      })
+                             (system-deltas #{:c2} #{:c2 :c1}))))))
+  (testing "exiting a system with one component"
+    (is (= {:s1 :exiting} (first 
+                            (run-cljan
+                             (component :c1 identity)
+                             (component :c2 identity)
+                             (system :s1 [:c1]
+                                     {
+                                      :every identity
+                                      })
+                             [:bind e1 (entity)]
+                             (add-component e1 :c1 10)
+                             (system-deltas #{:c1} #{})))))
+    (is (= {:s1 :exiting} (first 
+                            (run-cljan
+                             (component :c1 identity)
+                             (component :c2 identity)
+                             (system :s1 [:c1]
+                                     {
+                                      :every identity
+                                      })
+                             [:bind e1 (entity)]
+                             (add-component e1 :c1 10)
+                             (system-deltas #{:c2 :c1} #{:c2})))))))
+
 (deftest removing-component-from-entity
   (testing "If the component is removed from the members of an entity"
     (is (= (@#'cljan.core/remove-component-from-entity
@@ -173,6 +217,10 @@
            []
            ))))
 
+(deftest test-entry-hook 
+  (testing "the entry hook is called on entities entering a simple system."
+    ()))
+
 
 ;; (deftest ecs-test-1
 ;;   (testing "Test entities, components, systems."
@@ -207,5 +255,6 @@
 ;;       (is (= 1 (count systems))))))
 
 (run-tests)
+
 
 
