@@ -2,40 +2,51 @@
   (:require [cljan.core :refer :all]
             [cljan.state-monad :refer :all]))
 
-(defn init-components 
-  []
-  (state-do 
-   (component :counter (fn [init] init))))
+(defn init-components []
+  (state-do
+   (component :growth-stage identity)
+   (component :growth-rate identity)))
 
-(defn inc-counter [counter entity]
-  (print "Inside inc-counter counter entity" counter entity "\n")
-  (set-ent-component entity :counter (+ 1
-                                        counter)))
+(defn grow [growth-stage growth-rate ent]
+  (set-ent-component ent :growth-stage (+ growth-rate growth-stage)))
 
 (defn init-systems []
-  (state-do 
-   (system :counters [:counter] {:every inc-counter})))
+  (state-do
+   (system :growing-things [:growth-stage :growth-rate] 
+     {:every grow})))
 
 (defn init-entities []
+  (state-repeat 10 
+                (fn [i]
+                  (state-do 
+                   [:bind e (entity)]
+                   (add-component e :growth-stage 0)
+                   (add-component e :growth-rate (rand-int 10))))))
+
+
+(defn init []
   (state-do 
-   [:bind 
-    e1 (entity)
-    e2 (entity)]
-   (add-component e1 :counter 0)
-   (add-component e2 :counter 10)))
-
-(defn get-counter-value [ent-id]
-  (get-ent-component ent-id :counter))
-
-(defn go []
-  (run-cljan 
    (init-components)
    (init-systems)
-   (init-entities)
-   (execute-system :counters)
-   (execute-system :counters)
-   (system-map :counters get-counter-value)
-   ;(system-entities-snapshot :counters)
-   ))
+   (init-entities)))
 
-(go)
+(defn update []
+  (execute-system :growing-things))
+
+
+(def world (atom (run-cljan-for-state (init))))
+
+(defn update-world! []
+  (swap! world (fn [world]
+                 (update-cljan world (update)))))
+
+(loop [i 0]
+  (if (< i 10) (do (update-world!) (recur (+ i 1))) @world))
+
+(map (fn [key] 
+       (-> ((:entities @world) key) :components :growth-stage)) 
+     (keys (:entities @world)))
+
+(0 140 140 120 40 180 20 120 40 160)
+
+

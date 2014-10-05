@@ -272,17 +272,35 @@
    (set-ent-component ent-id component-id (apply assoc component-id args))))
 
 (defn dip-component
-  "Uses TRANSFORM, a function which recieves the old component value
+  "Uses TRANSFORM, a regular function which recieves the old component value
   for COMPONENT-ID from the ENTITY-ID and returns a new value, to
-  update the entity's component."
+  update the entity's component.
+
+  If your transform function needs to side effect in the state monad,
+  then use state-dip-component."
   [ent-id component-id transform]
   (state-do 
    [:bind component (get-ent-component ent-id component-id)]
    (set-ent-component ent-id component-id (transform component))))
 
-(defn handle-systems-for-entity [ent-id]
+(defn state-dip-component
+  "Uses TRANSFORM, a state function which recieves the old component value
+  for COMPONENT-ID from the ENTITY-ID and returns a new value, to
+  update the entity's component.
+
+  If your transform is a pure function with respect to the state
+  monad, you can use dip-component."
+  [ent-id component-id transform]
+  (state-do 
+   [:bind 
+    component (get-ent-component ent-id component-id)
+    result (transform component)]
+   (set-ent-component ent-id component-id result)))
+
+(defn handle-systems-for-entity 
   "Given an entity ID, this function iterates through the systems and
   adds the entity to systems which match the components of the entity."
+  [ent-id]  
   (state-do 
    [:bind ent (get-ent ent-id)]
    [:let ent-component-ids (:component-ids ent)]
