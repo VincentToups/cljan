@@ -16,6 +16,98 @@ agnostic, allowing you to use it with the system of your choice.
 
 ## Usage
 
+We begin with a brief example, but if you are interested in the
+concepts underpinning the library, see below for an explanation of the
+state monad and of entity component systems.
+
+### Example
+
+We'll now walk through defining a simple example.  
+
+We begin with defining our components.  One always begins with
+components, because we build up systems by reference to what
+components constitute membership and we construct entities by what
+components they have.
+
+Our world will simulate some crops, which have a growth stage and a
+growth rate.  Each piece of data will be one component:
+
+    (defn init-components []
+      (state-do 
+       (component :growth-stage identity)
+       (component :growth-rate identity)))
+
+The function `component` creates a component in the Cljan universe.
+It takes two arguments: the first is the name of the system and the
+second is a constructor.  Each of our components is just a single
+number, so our constructors are the identity function, but we may
+wish, in general, to perform calculations before returning the
+constructed value.
+
+We now create our system:
+
+    (defn grow [growth-stage growth-rate ent]
+      (set-ent-component ent :growth-stage (+ growth-rate growth-stage)))
+
+    (defn init-systems []
+      (state-do
+       (system :growing-things [:growth-stage :growth-rate] 
+         {:every grow})))
+
+This code means: "Create a system called `growing things` which
+operates on any entities which contain a growth stage and a growth
+rat.  Every time this system is executed, update the growth stage by
+the growth rate."
+
+Finally, we create some entities:
+
+    (defn init-entities []
+      (state-repeat 10 
+                    (fn [i]
+                      (state-do 
+                       [:bind e (entity)]
+                       (add-component e :growth-state 0)
+                       (add-component e :growth-rate (rand-int
+      10))))))
+
+Here we create ten entities and give them random growth rates.  All
+that remains is to define our init and update function:
+
+    (defn init []
+      (state-do 
+       (init-components)
+       (init-systems)
+       (init-entities)))
+
+    (defn update []
+      (execute-system :growing-things))
+
+Of course, eventually we must initialize and update our systems.
+Cljan provides a special form to run Cljan code on a fresh Cljan
+state and to update a cljan state with a state-function:
+
+    (def world (atom (run-cljan-for-state (init))))
+
+    (defn update-world! []
+      (swap! world (fn [world]
+                     (update-cljan world (update)))))
+
+    (loop [i 0]
+      (if (< i 10) (do (update-world!) (recur (+ i 1))) @world))
+
+Here we initialize our Cljan state inside an atom and update it ten
+times.  We can then extract the growth stage of each entity and see
+how they have developed:
+
+    (map (fn [key] 
+           (-> ((:entities @world) key) :components :growth-stage)) 
+         (keys (:entities @world)))
+
+    ; -> (0 140 140 120 40 180 20 120 40 160)
+
+And that is the whole story!
+
+
 ### Background
 
 #### Concepts
@@ -125,92 +217,6 @@ would be used like so:
      [:bind dead? (attack 5)]
      (if dead? attack end-game))
 
-### Example
-
-We'll now walk through defining a simple example.  
-
-We begin with defining our components.  One always begins with
-components, because we build up systems by reference to what
-components constitute membership and we construct entities by what
-components they have.
-
-Our world will simulate some crops, which have a growth stage and a
-growth rate.  Each piece of data will be one component:
-
-    (defn init-components []
-      (state-do 
-       (component :growth-stage identity)
-       (component :growth-rate identity)))
-
-The function `component` creates a component in the Cljan universe.
-It takes two arguments: the first is the name of the system and the
-second is a constructor.  Each of our components is just a single
-number, so our constructors are the identity function, but we may
-wish, in general, to perform calculations before returning the
-constructed value.
-
-We now create our system:
-
-    (defn grow [growth-stage growth-rate ent]
-      (set-ent-component ent :growth-stage (+ growth-rate growth-stage)))
-
-    (defn init-systems []
-      (state-do
-       (system :growing-things [:growth-stage :growth-rate] 
-         {:every grow})))
-
-This code means: "Create a system called `growing things` which
-operates on any entities which contain a growth stage and a growth
-rat.  Every time this system is executed, update the growth stage by
-the growth rate."
-
-Finally, we create some entities:
-
-    (defn init-entities []
-      (state-repeat 10 
-                    (fn [i]
-                      (state-do 
-                       [:bind e (entity)]
-                       (add-component e :growth-state 0)
-                       (add-component e :growth-rate (rand-int
-      10))))))
-
-Here we create ten entities and give them random growth rates.  All
-that remains is to define our init and update function:
-
-    (defn init []
-      (state-do 
-       (init-components)
-       (init-systems)
-       (init-entities)))
-
-    (defn update []
-      (execute-system :growing-things))
-
-Of course, eventually we must initialize and update our systems.
-Cljan provides a special form to run Cljan code on a fresh Cljan
-state and to update a cljan state with a state-function:
-
-    (def world (atom (run-cljan-for-state (init))))
-
-    (defn update-world! []
-      (swap! world (fn [world]
-                     (update-cljan world (update)))))
-
-    (loop [i 0]
-      (if (< i 10) (do (update-world!) (recur (+ i 1))) @world))
-
-Here we initialize our Cljan state inside an atom and update it ten
-times.  We can then extract the growth stage of each entity and see
-how they have developed:
-
-    (map (fn [key] 
-           (-> ((:entities @world) key) :components :growth-stage)) 
-         (keys (:entities @world)))
-
-    ; -> (0 140 140 120 40 180 20 120 40 160)
-
-And that is the whole story!
 
 ## On the Implementation
 
