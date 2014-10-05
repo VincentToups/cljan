@@ -3,6 +3,18 @@
             [cljan.core :refer :all]
             [cljan.state-monad :refer :all]))
 
+(deftest system-entities-snapshot-preserves-state 
+  (testing "requesting the list of system entities should not delete the state."
+    (is (not= nil (second 
+                 (run-cljan
+                  (component :c1 identity)
+                  (component :c2 identity)
+                  (system :s1 [:c1]
+                          {
+                           :every identity
+                           })
+                  (system-entities-snapshot :s1)))))))
+
 (deftest test-system-deltas 
   (testing "entering a system with one component"
     (is (= {:s1 :entering} (first 

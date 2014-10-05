@@ -111,6 +111,12 @@
              [ignored new-state] ((f first) state)]
          (recur new-state rest))))))
 
+(defn state-repeat 
+  "Repeat the parameterized state-function F N times, passing the
+  iteration as the first parameter."
+  [n f]
+  (state-for-each f (range n)))
+
 (defn state-map 
   "Map F, a state-function, across the sequence COLLECTION and return
   a COLLECTION of the results."

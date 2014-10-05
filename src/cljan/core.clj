@@ -33,6 +33,12 @@
   "Identical to run-cljan, except it discards the final state and returns only the monadic return value."
   `(first (run-cljan ~@body )))
 
+(defmacro run-cljan-for-state [& body]
+  `(second (run-cljan ~@body)))
+
+(defmacro update-cljan [state & body]
+  `(second ((state-do ~@body) ~state)))
+
 (defn delete [ent]
   "Removes a given entity ID from the current state."
   (fn [state]
@@ -70,6 +76,7 @@
                    (assoc systems name
                           (assoc behaviors
                             :components (set components)
+                            :components-order components
                             :first-entity-id nil
                             :last-entity-id nil)))])))
 
@@ -410,7 +417,6 @@ cljan, since it is how all entities define their behavior."
                  (state-fun current)
                  (next-entity current system-id)) 
                 state)]
-           (print "In system-for-each (" system-id ") next is " next ", previous is " current)
            (recur next new-state))))))
 
 (defn system-reduce 
@@ -494,7 +500,7 @@ cljan, since it is how all entities define their behavior."
   with CALL-WITH-COMPONENTS to quickly operate on the components of a
   system for an entity."
   [system-id]
-  (state-get :systems system-id :components))
+  (state-get :systems system-id :components-order))
 
 (defn call-on-system
   "Given a function F which takes an argument for each component of
