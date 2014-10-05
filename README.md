@@ -56,7 +56,7 @@ We now create our system:
 
 This code means: "Create a system called `growing things` which
 operates on any entities which contain a growth stage and a growth
-rat.  Every time this system is executed, update the growth stage by
+rate.  Every time this system is executed, update the growth stage by
 the growth rate."
 
 Finally, we create some entities:
