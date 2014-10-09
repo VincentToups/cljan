@@ -132,3 +132,11 @@
              rest (rest collection)
              [val new-state] ((f first) state)]
          (recur (conj result val) new-state rest))))))
+
+(defn state-dip 
+  "Given a chain of keys pointing to somewhere in the state, pass that
+  value to f and set the value to the return value of f." 
+  [location f]
+  (state-do 
+   [:bind v (apply state-get location)]
+   (state-assoc-in location (f v))))

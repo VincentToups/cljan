@@ -39,20 +39,16 @@
 (defmacro update-cljan [state & body]
   `(second ((state-do ~@body) ~state)))
 
-(defn delete [ent]
-  "Removes a given entity ID from the current state."
-  (fn [state]
-    (assoc state :entities
-           (filter #(not= % ent) (:entities state)))))
-
 (defn component
   "Adds a component to the cljan universe.
   A component is a piece of data which allows us to construct
-  behaviors by building systems, which operate on entities.."
-  [name maker]
-  (fn [state]
-    (let [components (:components state)]
-      [name (assoc state :components (assoc components name {:name name :maker maker}))])))
+  behaviors by building systems, which operate on entities.." 
+  ([name]
+     (component name identity))
+  ([name maker]
+     (fn [state]
+       (let [components (:components state)]
+         [name (assoc state :components (assoc components name {:name name :maker maker}))]))))
 
 (defn component? [id]
   "Returns TRUE when ID is a component id in the cljan universe STATE."
@@ -558,4 +554,23 @@ cljan, since it is how all entities define their behavior."
                     (remove-entity-from-system ent-id system-id)
                     (maybe-invoke-exit-hook ent-id system-id))
                    :no-change (state-return nil)))) (keys deltas))))
+
+(defn delete [ent-id]
+  "Removes a given entity ID from the current state."
+  (state-do 
+   [:bind 
+    old-components (get-ent-component-ids ent-id)
+    deltas (system-deltas old-components #{})]
+   (state-map (fn [system-id]
+                (state-do 
+                 [:let val (system-id deltas)]
+                 (case val 
+                   :exiting 
+                   (state-do 
+                    (remove-entity-from-system ent-id system-id)
+                    (maybe-invoke-exit-hook ent-id system-id))
+                   :no-change (state-return nil)))) (keys deltas))
+   (state-dip [:entities] 
+              #(dissoc % ent-id))))
+
 
