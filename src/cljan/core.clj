@@ -111,7 +111,7 @@
    (if result (state-do (system-raw name components behaviors))
        (throw (Throwable. "System refered to components that don't exist.")))))
 
-(defn entity
+(defn entity-raw
   "Creates an empty entity. An entity is a bag of components. The point of
   having one is to represent something in the game with certain features that
   imply behaviors."
@@ -121,6 +121,19 @@
    [:bind entities (state-get :entities)]
    (state-assoc :entities (assoc entities id {:id id :component-ids #{} :components {} :nexts {} :prevs {}}))
    (state-return id)))
+
+(declare add-component)
+(defn entity 
+  "Like entity, but takes additional component descriptors of the form 
+  [component-id arg1 ... argN] and adds those components to the entity.
+  See also entity-raw"
+  [& component-descriptors]
+  (state-do 
+   [:bind e (entity-raw)]
+   (state-map 
+    #(apply add-component e %)
+    component-descriptors)
+   (state-return e)))
 
 (defn next-entity 
   "Low level function to iterate forward through the entities through
