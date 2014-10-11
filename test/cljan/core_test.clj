@@ -226,45 +226,219 @@
                 (add-component e1 :c1 10)
                 (system-entities-snapshot :s1))
                first)
-           []
-           ))))
+           []))))
 
-(deftest test-entry-hook 
-  (testing "the entry hook is called on entities entering a simple system."
-    ()))
+(deftest reduction-over-a-system []
+  (testing "The usage of system-reduce-with-components."
+    (let [init-components (fn []
+                            (state-do
+                             (component :value)
+                             (component :incr)))
+          growing-values-every (fn [value incr ent]
+                                 (set-ent-component ent :value (+ value incr)))
+          init-systems (fn []
+                         (system :growing-values [:value :incr]
+                                 {:every growing-values-every}))
+          init-entities (fn []
+                          (state-do
+                           (entity 
+                            [:value 0]
+                            [:incr 10])
+                           (entity
+                            [:value 0]
+                            [:incr 11])))
+          get-value (fn []
+                       (system-reduce-with-components
+                        :growing-values 
+                        (fn [acc value incr ent]
+                          (state-return (+ acc value)))
+                        0))]
+      (is (= 42 (run-cljan* 
+                      (init-components)
+                      (init-systems)
+                      (init-entities)
+                      (execute-system :growing-values)
+                      (execute-system :growing-values)
+                      (get-value)))))))
 
+(deftest test-invoking-hooks
+  (testing "Whether exit hook on system works when an entity exits a system but is not deleted."
+    (let [init-components (fn []
+                            (state-do
+                             (component :value)
+                             (component :incr)))
+          growing-values-exit (fn [ent]
+                               (state-assoc :exit-called ent))
+          growing-values-every (fn [value incr ent]
+                                 (set-ent-component ent :value (+ value incr)))
+          init-systems (fn []
+                         (system :growing-values [:value :incr]
+                                 {:every growing-values-every :exit growing-values-exit}))
+          init-entities (fn []
+                          (state-do
+                           (entity 
+                            [:value 0]
+                            [:incr 10])
+                           [:bind stored-ent (entity
+                             [:value 0]
+                             [:incr 11])]
+                           (state-assoc :stored-ent stored-ent)))
+          get-value (fn []
+                      (state-get :exit-called))]
+      (is (= 1 (run-cljan* 
+                      (init-components)
+                      (init-systems)
+                      (init-entities)
+                      (execute-system :growing-values)
+                      [:bind e (state-get :stored-ent)]
+                      (remove-component e :incr)
+                      (get-value))))))
+  (testing "Whether exit hook on system works when an entity is deleted."
+    (let [init-components (fn []
+                            (state-do
+                             (component :value)
+                             (component :incr)))
+          growing-values-exit (fn [ent]
+                               (state-assoc :exit-called ent))
+          growing-values-every (fn [value incr ent]
+                                 (set-ent-component ent :value (+ value incr)))
+          init-systems (fn []
+                         (system :growing-values [:value :incr]
+                                 {:every growing-values-every :exit growing-values-exit}))
+          init-entities (fn []
+                          (state-do
+                           (entity 
+                            [:value 0]
+                            [:incr 10])
+                           [:bind stored-ent (entity
+                             [:value 0]
+                             [:incr 11])]
+                           (state-assoc :stored-ent stored-ent)))
+          get-value (fn []
+                      (state-get :exit-called))]
+      (is (= 1 (run-cljan* 
+                      (init-components)
+                      (init-systems)
+                      (init-entities)
+                      (execute-system :growing-values)
+                      [:bind e (state-get :stored-ent)]
+                      (delete e)
+                      (get-value))))))
+  (testing "Whether entry hook on system works."
+    (let [init-components (fn []
+                            (state-do
+                             (component :value)
+                             (component :incr)))
+          growing-values-enter (fn [ent]
+                               (state-assoc :enter-called ent))
+          growing-values-every (fn [value incr ent]
+                                 (set-ent-component ent :value (+ value incr)))
+          init-systems (fn []
+                         (system :growing-values [:value :incr]
+                                 {:every growing-values-every :enter growing-values-enter}))
+          init-entities (fn []
+                          (state-do
+                           (entity 
+                            [:value 0]
+                            [:incr 10])
+                           (entity
+                            [:value 0]
+                            [:incr 11])))
+          get-value (fn []
+                      (state-get :enter-called))]
+      (is (= 1 (run-cljan* 
+                      (init-components)
+                      (init-systems)
+                      (init-entities)
+                      (execute-system :growing-values)
+                      (get-value))))))
+  (testing "Whether invoking post on a system works."
+    (let [init-components (fn []
+                            (state-do
+                             (component :value)
+                             (component :incr)))
+          growing-values-post (fn []
+                               (state-assoc :post-called true))
+          growing-values-every (fn [value incr ent]
+                                 (set-ent-component ent :value (+ value incr)))
+          init-systems (fn []
+                         (system :growing-values [:value :incr]
+                                 {:every growing-values-every :post growing-values-post}))
+          init-entities (fn []
+                          (state-do
+                           (entity 
+                            [:value 0]
+                            [:incr 10])
+                           (entity
+                            [:value 0]
+                            [:incr 11])))
+          get-value (fn []
+                      (state-get :post-called))]
+      (is (= true (run-cljan* 
+                      (init-components)
+                      (init-systems)
+                      (init-entities)
+                      (execute-system :growing-values)
+                      (get-value))))))
+  (testing "Whether invoking pre on a system works."
+    (let [init-components (fn []
+                            (state-do
+                             (component :value)
+                             (component :incr)))
+          growing-values-pre (fn []
+                               (state-assoc :pre-called true))
+          growing-values-every (fn [value incr ent]
+                                 (set-ent-component ent :value (+ value incr)))
+          init-systems (fn []
+                         (system :growing-values [:value :incr]
+                                 {:every growing-values-every :pre growing-values-pre}))
+          init-entities (fn []
+                          (state-do
+                           (entity 
+                            [:value 0]
+                            [:incr 10])
+                           (entity
+                            [:value 0]
+                            [:incr 11])))
+          get-value (fn []
+                      (state-get :pre-called))]
+      (is (= true (run-cljan* 
+                      (init-components)
+                      (init-systems)
+                      (init-entities)
+                      (execute-system :growing-values)
+                      (get-value))))))
+  (testing "Whether invoking every on a system works."
+    (let [init-components (fn []
+                            (state-do
+                             (component :value)
+                             (component :incr)))
+          growing-values-every (fn [value incr ent]
+                                 (set-ent-component ent :value (+ value incr)))
+          init-systems (fn []
+                         (system :growing-values [:value :incr]
+                                 {:every growing-values-every}))
+          init-entities (fn []
+                          (state-do
+                           (entity 
+                            [:value 0]
+                            [:incr 10])
+                           (entity
+                            [:value 0]
+                            [:incr 11])))
+          get-values (fn []
+                       (system-map-with-components
+                        :growing-values 
+                        (fn [value incr ent]
+                          (state-return value))))]
+      (is (= [20 22] (run-cljan* 
+                      (init-components)
+                      (init-systems)
+                      (init-entities)
+                      (execute-system :growing-values)
+                      (execute-system :growing-values)
+                      (get-values)))))))
 
-;; (deftest ecs-test-1
-;;   (testing "Test entities, components, systems."
-;;     (let [{:keys [components systems entities]}
-;;           (run-cljan
-;;            [health (component (fn [amt] amt))
-;;             _ (system :components [health]
-;;                       :every (fn [amt ent]
-;;                                (if (< amt 0)
-;;                                  (delete ent)
-;;                                  (state-return nil))))
-;;             ent (entity)
-;;             _ (entity-add ent health 0)] (run-all))]
-;;       (is (= 1 (count components)))
-;;       (is (= 1 (count entities)))
-;;       (is (= 1 (count systems))))))
-
-;; (deftest run-systems-test-1
-;;   (testing "Test the implications of running one system."
-;;     (let [{:keys [components systems entities]}
-;;           (run-cljan
-;;            [health (component (fn [amt] amt))
-;;             _ (system :components [health]
-;;                       :every (fn [amt ent]
-;;                                (if (< amt 0)
-;;                                  (delete ent)
-;;                                  (state-return nil))))
-;;             ent (entity)
-;;             _ (entity-add ent health 0)] (run-all))]
-;;       (is (= 1 (count components)))
-;;       (is (= 1 (count entities)))
-;;       (is (= 1 (count systems))))))
 
 (run-tests)
 

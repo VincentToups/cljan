@@ -367,11 +367,13 @@ cljan, since it is how all entities define their behavior."
     (set-ent entid (assoc ent
                      :component-ids (conj component-ids component-id)
                      :components (assoc components component-id component))))
-   (throw (Throwable. (format "Could not add component %s to entity." component-id)))))
+   (state-do 
+    [:bind components (state-get :components)]
+    (throw (Throwable. (format "Could not add component %s to entity %s (valid components are: %s)." component-id entid (keys components)))))))
 
 (defn get-entry-hook 
   "A system may have a function which runs when an entity enters the
-  system.  This function retrieves that function or nil if no such
+  system.  Thisxo function retrieves that function or nil if no such
   exists."
   [system-id]
   (state-get :systems system-id :enter))
@@ -390,6 +392,19 @@ cljan, since it is how all entities define their behavior."
   [system-id]
   (state-get :systems system-id :every))
 
+(defn get-pre-hook 
+  "A system may have a hook to run before the every function is
+  executed.  This function fetches that hook, or nil if none exists."
+  [system-id]
+  (state-get :systems system-id :pre))
+
+(defn get-post-hook 
+  "A system may have a hook to run after the every function is
+  executed.  This function fetches that hook, or nil if none exists."
+  [system-id]
+  (state-get :systems system-id :post))
+
+
 (defn maybe-invoke-entry-hook
   "Invokes the entry function for a system on an entity, if the entry function exists."
   [ent-id system-id]
@@ -403,6 +418,24 @@ cljan, since it is how all entities define their behavior."
   (state-do 
    [:bind hook (get-exit-hook system-id)]
    (if hook (hook ent-id) (state-return ent-id))))
+
+(defn maybe-invoke-pre-hook 
+  "Invokes the pre hook of a system.  The pre hook of a system is
+  invoked before the every hook of a system when the execute-system
+  function is called."
+  [system-id]
+  (state-do
+   [:bind hook (get-pre-hook system-id)]
+   (if hook (hook) (state-return nil))))
+
+(defn maybe-invoke-post-hook 
+  "Invokes the post hook of a system.  The post hook of a system is
+  invoked before the every hook of a system when the execute-system
+  function is called."
+  [system-id]
+  (state-do
+   [:bind hook (get-post-hook system-id)]
+   (if hook (hook) (state-return nil))))
 
 (defn add-component [ent-id component-id & args]
   "This function adds a component instance to an entity and assures
@@ -449,7 +482,13 @@ cljan, since it is how all entities define their behavior."
 (defn system-reduce 
   "Call the reduction function STATE-FUN-REDUCER on each member of the
   system SYSTEM-ID and the previous value of the reduction function,
-  finally, return into the state monad the result of the reduction."
+  finally, return into the state monad the result of the reduction.
+  
+  STATE-FUN-REDUCER must have the type:
+
+  PREVIOUS-VALUE ENT -> (STATE -> [RESULT, STATE])
+
+  "
   [system-id state-reducer init]
   (state-do 
    [:bind 
@@ -469,7 +508,31 @@ cljan, since it is how all entities define their behavior."
                 state)]
            (recur next-ent new-acc new-state))))))
 
+(declare system-components)
+(declare call-with-components)
+(declare call-with-accumulator-and-components)
+
+(defn system-reduce-with-components 
+  "Call the reduction function STATE-FUN-REDUCER on each member of the
+  system SYSTEM-ID and the previous reduction value, beginning with INIT.
+
+  The reduction function should have the signature:
+
+  PREVIOUS-VALUE COMPONENT1 ... COMPONENTN ENT -> (STATE -> [RESULT, STATE])
+  
+  "
+  [system-id state-reducer init]
+  (state-do 
+   [:bind components (system-components system-id)]
+   (system-reduce system-id 
+                  (fn [acc ent]
+                    (call-with-accumulator-and-components acc ent components state-reducer))
+                  init)))
+
 (defn system-map 
+  "Map a curriend state function F across all the entities in a
+  system, provided as entity IDs.  F must accept the current entity
+  and return a state function, which is executed against the state."
   [system-id f]
   (system-reduce 
    system-id 
@@ -478,6 +541,20 @@ cljan, since it is how all entities define their behavior."
       [:bind res (f item)]
       (state-return (conj acc res)))) 
    []))
+
+(defn system-map-with-components 
+  "Map a curried state-function expecting the components of SYSTEM-ID
+  across the entities in the system, collecting the values and
+  side-effecting the state as implied in F.  F must take a number of
+  arguments equal to the components in the system plus 1.  The
+  components are passed in as they were ordered in the system
+  definition."
+  [system-id f]
+  (state-do 
+   [:bind components (system-components system-id)]
+   (system-map system-id 
+               (fn [ent]
+                 (call-with-components ent components f)))))
 
 (defn system-entities-snapshot 
   "Return the list of entities (as entity ids) "
@@ -522,6 +599,14 @@ cljan, since it is how all entities define their behavior."
   [ent-id component-ids f]
   (state-bind (get-components ent-id component-ids) #(apply f (conj % ent-id))))
 
+(defn call-with-accumulator-and-components 
+  "F should be a function of (+ 2 (count component-ids)) arguments
+  which is called with an accumulator, the component ids and the entity.  Useful to
+  quickly call a function on an entity with components unpacked.
+  "
+  [acc ent-id component-ids f]
+  (state-bind (get-components ent-id component-ids) #(apply f acc (conj % ent-id))))
+
 (defn system-components 
   "Get the set of components which makes up a system.  Can be used
   with CALL-WITH-COMPONENTS to quickly operate on the components of a
@@ -542,8 +627,11 @@ cljan, since it is how all entities define their behavior."
   "CALL-ON-SYSTEM which simply invokes the EVERY function of the
   system, if such exists."
   [system-id]
-  (state-bind (get-every system-id)
-        #(call-on-system system-id %)))
+  (state-do 
+   (maybe-invoke-pre-hook system-id)
+   (state-bind (get-every system-id)
+               #(call-on-system system-id %))
+   (maybe-invoke-post-hook system-id)))
 
 (defn remove-component
   "Removes a component with a given COMPONENT-ID from an entity with a
