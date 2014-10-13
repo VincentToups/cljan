@@ -405,19 +405,25 @@ cljan, since it is how all entities define their behavior."
   (state-get :systems system-id :post))
 
 
+(declare system-components)
+(declare call-with-components)
 (defn maybe-invoke-entry-hook
   "Invokes the entry function for a system on an entity, if the entry function exists."
   [ent-id system-id]
   (state-do 
-   [:bind hook (get-entry-hook system-id)]
-   (if hook (hook ent-id) (state-return ent-id))))
+   [:bind 
+    hook (get-entry-hook system-id)
+    components (system-components system-id)]
+   (if hook (call-with-components ent-id components hook) (state-return ent-id))))
 
 (defn maybe-invoke-exit-hook 
   "Invokes the exit function for a system on an entity, if the entry function exists."
   [ent-id system-id]
   (state-do 
-   [:bind hook (get-exit-hook system-id)]
-   (if hook (hook ent-id) (state-return ent-id))))
+   [:bind 
+    hook (get-exit-hook system-id)
+    components (system-components system-id)]
+   (if hook (call-with-components ent-id components hook) (state-return ent-id))))
 
 (defn maybe-invoke-pre-hook 
   "Invokes the pre hook of a system.  The pre hook of a system is
@@ -455,8 +461,8 @@ cljan, since it is how all entities define their behavior."
                     (maybe-invoke-entry-hook ent-id system-id))
                    :exiting 
                    (state-do 
-                    (remove-entity-from-system ent-id system-id)
-                    (maybe-invoke-exit-hook ent-id system-id))
+                    (maybe-invoke-exit-hook ent-id system-id)
+                    (remove-entity-from-system ent-id system-id))
                    :no-change (state-return nil)))) (keys deltas))))
 
 (defn system-for-each 
@@ -652,8 +658,8 @@ cljan, since it is how all entities define their behavior."
                     (maybe-invoke-entry-hook ent-id system-id))
                    :exiting 
                    (state-do 
-                    (remove-entity-from-system ent-id system-id)
-                    (maybe-invoke-exit-hook ent-id system-id))
+                    (maybe-invoke-exit-hook ent-id system-id)
+                    (remove-entity-from-system ent-id system-id))
                    :no-change (state-return nil)))) (keys deltas))))
 
 (defn delete [ent-id]
@@ -668,8 +674,8 @@ cljan, since it is how all entities define their behavior."
                  (case val 
                    :exiting 
                    (state-do 
-                    (remove-entity-from-system ent-id system-id)
-                    (maybe-invoke-exit-hook ent-id system-id))
+                    (maybe-invoke-exit-hook ent-id system-id)
+                    (remove-entity-from-system ent-id system-id))
                    :no-change (state-return nil)))) (keys deltas))
    (state-dip [:entities] 
               #(dissoc % ent-id))))

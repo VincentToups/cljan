@@ -267,7 +267,7 @@
                             (state-do
                              (component :value)
                              (component :incr)))
-          growing-values-exit (fn [ent]
+          growing-values-exit (fn [value incr ent]
                                (state-assoc :exit-called ent))
           growing-values-every (fn [value incr ent]
                                  (set-ent-component ent :value (+ value incr)))
@@ -298,7 +298,7 @@
                             (state-do
                              (component :value)
                              (component :incr)))
-          growing-values-exit (fn [ent]
+          growing-values-exit (fn [value incr ent]
                                (state-assoc :exit-called ent))
           growing-values-every (fn [value incr ent]
                                  (set-ent-component ent :value (+ value incr)))
@@ -329,7 +329,7 @@
                             (state-do
                              (component :value)
                              (component :incr)))
-          growing-values-enter (fn [ent]
+          growing-values-enter (fn [value incr ent]
                                (state-assoc :enter-called ent))
           growing-values-every (fn [value incr ent]
                                  (set-ent-component ent :value (+ value incr)))
