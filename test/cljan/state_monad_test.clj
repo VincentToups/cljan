@@ -33,6 +33,15 @@
                           (state-return (+ x 1))))
                        [1 2 3]) {})))))
 
+(deftest state-call-test
+  (testing "Whether state-call properly extracts and applies values from the state-monad."
+    (is (= 11 (first 
+               ((state-call 
+                 (fn [a b] (state-return (+ a b)))
+                 (state-get :x) 
+                 (state-get :y))
+                {:x 5 :y 6}))))))
+
 (run-tests)
 
 

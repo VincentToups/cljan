@@ -140,3 +140,12 @@
   (state-do 
    [:bind v (apply state-get location)]
    (state-assoc-in location (f v))))
+
+(defn state-call 
+  "Given F and a set of values in the state-monad apply F, which
+  should be a function producing a state function, to the unwrapped
+  values implied by the subsequent arguments."
+  [f & rest]
+  (state-do 
+   [:bind unwrapped-valued (state-map identity rest)]
+   (apply f unwrapped-valued)))
