@@ -12,20 +12,20 @@
 
 (defn init-systems []
   (state-do
-   (system :growing-things [:growth-stage :growth-rate] 
+   (system :growing-things [:growth-stage :growth-rate]
      {:every grow})))
 
 (defn init-entities []
-  (state-repeat 10 
+  (state-repeat 10
                 (fn [i]
-                  (state-do 
+                  (state-do
                    [:bind e (entity)]
                    (add-component e :growth-stage 0)
                    (add-component e :growth-rate (rand-int 10))))))
 
 
 (defn init []
-  (state-do 
+  (state-do
    (init-components)
    (init-systems)
    (init-entities)))
@@ -43,9 +43,13 @@
 ;; (loop [i 0]
 ;;   (if (< i 10) (do (update-world!) (recur (+ i 1))) @world))
 
-;; (map (fn [key] 
-;;        (-> ((:entities @world) key) :components :growth-stage)) 
+;; (map (fn [key]
+;;        (-> ((:entities @world) key) :components :growth-stage))
 ;;      (keys (:entities @world)))
 
 
+;; (map (fn [key]
+;;        (-> ((:entities @world) key) :components :growth-stage))
+;;      (keys (:entities @world)))
 
+;; (0 140 140 120 40 180 20 120 40 160)

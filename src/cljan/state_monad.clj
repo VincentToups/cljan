@@ -1,19 +1,30 @@
 (ns cljan.state-monad
-  (:require [clojure.core.typed :refer [ann All HVec Any Map Coll Option]
+  (:require [clojure.core.typed :refer
+             [ann All HVec Any Map Coll Option Seq defalias AnyInteger]
              :as t]
             [clojure.core.match :refer [match]]))
 
-(ann state-return (All [X Y] [X -> [Y -> (HVec [X Y])]]))
+(defalias MonadicState
+  (HVec [Any Any]))
+
+(defalias MonadicFunctionArity1
+  [Any -> [Any -> MonadicState]])
+
+(defalias MonadicFunctionArity2
+  [Any Any -> [Any -> MonadicState]])
+
+(ann state-return (All [x y] [x -> [y -> (HVec [x y])]]))
 (defn state-return [x]
   (fn [state]
     [x state]))
 
 (ann state-bind
-     (All [state x y]
-          [[state -> (HVec [x state])]
-           [x -> [state -> (HVec [y state])]]
-           ->
-           [state -> (HVec [y state])]]))
+       (All [State X Y]
+              [[State -> (HVec [X State])]
+               [X -> [State -> (HVec [Y State])]]
+               ->
+               [State -> (HVec [Y State])]]))
+
 (defn state-bind [mv mf]
   (fn [state]
     (let [[value new-state] (mv state)]
@@ -49,40 +60,27 @@
                    ~false-branch))))
 
 (ann state-assoc
-     (All [k v]
-          [k v -> [(Map k v) -> (HVec [v (Map k v)])]]))
+       (All [k v x]
+              [k v -> [(Map k v) ->
+                       (HVec [v (Map k v)])]]))
 (defn state-assoc [key val]
   (fn [state]
     [val
      (assoc state key val)]))
 
 (ann state-assoc-in
-     (All [v]
-          [(Seq Any) v -> [(Map Any Any) ->
-                           (HVec [v Any])]]))
+     (All [x]
+          [(Seq Any) x -> [(Option (Map Any Any)) -> (HVec [x Any])]]))
 (defn state-assoc-in [keys val]
   (fn [state]
     [val (assoc-in state keys val)]))
 
-(ann get-from-state
-     [(Option (Map Any Any))
-      (Option (Coll Any)) -> (Option Any)])
-(defn- get-from-state
-  "Auxiliary function to make `state-get` easier to understand and type."
-  [state keys]
-  (t/loop [acc  :- (Option Any) nil
-           keys :- (Option (Coll Any)) keys]
-    (if-not (or state (seq keys))
-      acc
-      (recur (get state (first keys))
-             (rest keys)))))
-
-(ann state-get
-     [Any * -> [(Option (Map Any Any)) ->
-                (HVec [(Option Any) (Option (Map Any Any))])]])
-(defn state-get [& keys]
+(ann state-get-in
+     (All [state]
+          [Any * -> [state -> (HVec [Any state])]]))
+(defn state-get-in [& keys]
   (fn [state]
-    [(get-from-state state keys)
+    [(get-in state keys)
      state]))
 
 (ann extract-state
@@ -98,18 +96,82 @@
   (fn [old-state]
     [new-state new-state]))
 
-(defmacro defstatefn [name args & body]
-  `(defn ~name ~args (state-do ~@body)))
+(ann state-reduce
+     [MonadicFunctionArity2
+      (Option (Seq Any))
+      Any -> [MonadicState -> Any]])
+(defn state-reduce
+  "Using F, a state-function which takes an accumulator and an item, reduce
+  the sequence COLLECTION starting with the initial value INIT."
+  [f collection init]
+  (fn [state]
+    (t/loop [result     :- Any, init
+             state*     :- Any, state
+             collection :- (Option (Seq Any)), collection]
+      (cond
+       (empty? collection) [result state*]
+       :otherwise
+       (let [first (first collection)
+             rest (rest collection)
+             [new-result new-state] ((f result first) state*)]
+         (recur new-result
+                new-state
+                rest))))))
 
-;; (defn state-map [f collection]
-;;   (fn [state]
-;;     (loop [result []
-;;            state state
-;;            collection collection]
-;;       (match [collection]
-;;              [([] :seq)] [result state]
-;;              [([first & rest] :seq)]
-;;              (let [[val state] ((f first) state)]
-;;                (recur (conj result val)
-;;                       state
-;;                       rest))))))
+(ann state-for-each
+     [MonadicFunctionArity1
+      (Option (Seq Any))
+      -> [MonadicState -> Any]])
+(defn state-for-each
+  "For each item in collection, call the state-function F on the item."
+  [f collection]
+  (fn [state]
+    (t/loop [state*      :- Any               , state
+             collection  :- (Option (Seq Any)), collection]
+      (cond
+       (empty? collection) [nil state*]
+       :otherwise
+       (let [first (first collection)
+             rest (rest collection)
+             [ignored new-state] ((f first) state*)]
+         (recur new-state rest))))))
+
+(ann state-repeat
+     [AnyInteger MonadicFunctionArity1 ->
+      [MonadicState -> Any]])
+(defn state-repeat
+  "Repeat the parameterized state-function F N times, passing the
+  iteration as the first parameter."
+  [n f]
+  (state-for-each f (range n)))
+
+
+(ann state-map
+     [MonadicFunctionArity1 (Option (Seq Any))
+      -> [MonadicState -> Any]])
+(defn state-map
+  "Map F, a state-function, across the sequence COLLECTION and return
+  a COLLECTION of the results."
+  [f collection]
+  (fn [state]
+    (t/loop [result     :- (HVec []), []
+             state      :- Any, state
+             collection :- (Option (Seq Any)),  collection]
+      (cond
+       (empty? collection) [result state]
+       :otherwise
+       (let [first (first collection)
+             rest (rest collection)
+             [val new-state] ((f first) state)]
+         (recur (conj result val) new-state rest))))))
+
+
+;; (ann state-dip
+;;      [(Seq Any) MonadicFunctionArity1 -> MonadicState])
+(defn state-dip
+  "Given a chain of keys pointing to somewhere in the state, pass that
+  value to f and set the value to the return value of f."
+  [location f]
+  (state-do
+   [:bind v (apply state-get-in location)]
+   (state-assoc-in location (f v))))
