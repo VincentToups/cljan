@@ -272,6 +272,30 @@
   [ent-id component-id]
   (state-get :entities ent-id :components component-id))
 
+(defn on-ent-component 
+  "Call transform on the component denoted by component-id of the
+  entity ent-id and return (into the state monad) the result.
+
+  If your intent is, instead, to operate within the state-monad use
+  do-with-ent-component."
+  [ent-id component-id transform]
+  (state-do
+   [:bind component (get-ent-component ent-id component-id)]
+   (state-return (transform component))))
+
+(defn do-with-ent-component 
+  "Extract the component value indicated by component-id from ent-id,
+  and then call block on the result, executing the returned
+  state-function on the current state.
+
+  Use this to extract a component and then perform state actions with
+  it.  If you wish instead to simply transform a component value or
+  extract part of it, use `on-ent-component`."
+  [ent-id component-id block]
+  (state-do
+   [:bind component (get-ent-component ent-id component-id)]
+   (block component)))
+
 (defn assoc-component 
   "For components which are maps, this allows you to operate ASSOC
   semantics directly on the component value."
