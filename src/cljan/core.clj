@@ -504,8 +504,10 @@ cljan, since it is how all entities define their behavior."
                          (state-return nil))
          (let [[next new-state] 
                ((state-do 
+                 [:bind next-before (next-entity current system-id)]
                  (state-fun current)
-                 (next-entity current system-id)) 
+                 [:bind next-after (next-entity current system-id)]
+                 (state-return (or next-after next-before))) 
                 state)]
            (recur next new-state))))))
 
@@ -532,8 +534,9 @@ cljan, since it is how all entities define their behavior."
          (let [[[new-acc next-ent] new-state] 
                ((state-do 
                  [:bind 
+                  next-ent-before-reducer (next-entity current system-id)
                   new-acc (state-reducer acc current)
-                  next-ent (next-entity current system-id)]
+                  next-ent (or (next-entity current system-id) next-ent-before-reducer)]
                  (state-return [new-acc next-ent])) 
                 state)]
            (recur next-ent new-acc new-state))))))
