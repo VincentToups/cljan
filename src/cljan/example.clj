@@ -1,4 +1,4 @@
-(ns cljan.core-test
+(ns cljan.exmaple
   (:require [cljan.core :refer :all]
             [cljan.state-monad :refer :all]))
 
@@ -40,13 +40,12 @@
   (swap! world (fn [world]
                  (update-cljan world (update)))))
 
-(loop [i 0]
-  (if (< i 10) (do (update-world!) (recur (+ i 1))) @world))
+;; (loop [i 0]
+;;   (if (< i 10) (do (update-world!) (recur (+ i 1))) @world))
 
-(map (fn [key] 
-       (-> ((:entities @world) key) :components :growth-stage)) 
-     (keys (:entities @world)))
+;; (map (fn [key] 
+;;        (-> ((:entities @world) key) :components :growth-stage)) 
+;;      (keys (:entities @world)))
 
-(0 140 140 120 40 180 20 120 40 160)
 
 

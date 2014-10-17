@@ -1,4 +1,4 @@
-(defproject org.clojars.vincent/cljan "0.2.3"
+(defproject org.clojars.vincent/cljan "0.2.4"
   :description "Cljan is a pure, state-monadic entity-component system for games."
   :url "https://github.com/VincentToups/cljan"
   :license {:name "Eclipse Public License"
