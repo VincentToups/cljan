@@ -5,7 +5,7 @@
 
 ;;; private interface
 
-(defn- next-id 
+(defn- next-id
   "Returns the next ID to use for tagging entities.  Since each entity
   created by the system has a unique identifier, this is useful for
   creating them."
@@ -17,14 +17,14 @@
 
 ;;; public interface
 
-(defn make-cljan 
+(defn make-cljan
   "Create an empty cljan-universe." []
   {:components     {}
    :systems        {}
    :entities       {}
    :entity-id-counter 0})
 
-(defmacro run-cljan 
+(defmacro run-cljan
   "Given a cljan function, which is a function in the state monad which operates on a cljan state, execute that function and return two element list of [monadic-retval, final-state]. Cljan programs are large functions in the state monad, and this form executes such a function."
   [& body]
   `((state-do ~@body) (make-cljan)))
@@ -42,7 +42,7 @@
 (defn component
   "Adds a component to the cljan universe.
   A component is a piece of data which allows us to construct
-  behaviors by building systems, which operate on entities.." 
+  behaviors by building systems, which operate on entities.."
   ([name]
      (component name identity))
   ([name maker]
@@ -76,14 +76,14 @@
                             :first-entity-id nil
                             :last-entity-id nil)))])))
 
-(defn first-element-of-system 
+(defn first-element-of-system
   "Given a system id, return the first entity in that system (nil if empty)"
   [system-id]
-  (state-get :systems system-id :first-entity-id))
+  (state-get-in :systems system-id :first-entity-id))
 
 (defn last-element-of-system [system-id]
   "Given a system id, return the last entity in that system (nil if empty)"
-  (state-get :systems system-id :last-entity-id))
+  (state-get-in :systems system-id :last-entity-id))
 
 
 (defn components?
@@ -118,37 +118,37 @@
   []
   (state-do
    [:bind id next-id]
-   [:bind entities (state-get :entities)]
+   [:bind entities (state-get-in :entities)]
    (state-assoc :entities (assoc entities id {:id id :component-ids #{} :components {} :nexts {} :prevs {}}))
    (state-return id)))
 
 (declare add-component)
-(defn entity 
-  "Like entity, but takes additional component descriptors of the form 
+(defn entity
+  "Like entity, but takes additional component descriptors of the form
   [component-id arg1 ... argN] and adds those components to the entity.
   See also entity-raw"
   [& component-descriptors]
-  (state-do 
+  (state-do
    [:bind e (entity-raw)]
-   (state-map 
+   (state-map
     #(apply add-component e %)
     component-descriptors)
    (state-return e)))
 
-(defn next-entity 
+(defn next-entity
   "Low level function to iterate forward through the entities through
   a system."
   [entity-id system-id]
-  (state-get :entities entity-id :nexts system-id))
+  (state-get-in :entities entity-id :nexts system-id))
 
-(defn set-next-entity 
+(defn set-next-entity
   "Given an entity and a system id, set the next entity in the entity-linked-list.
-   This is a low level function, see add-entity-to-system and
+  This is a low level function, see add-entity-to-system and
   remove-entity-from-system."
   [of-entity-id system-id to-entity-id]
   (state-assoc-in [:entities of-entity-id :nexts system-id] to-entity-id))
 
-(defn set-prev-entity 
+(defn set-prev-entity
   "Given an entity and a system id, set the next entity in the entity-linked-list.
   This is a low level function, see add-entity-to-system and
   remove-entity-from-system."
@@ -156,11 +156,11 @@
   (state-assoc-in [:entities of-entity-id :prevs system-id] to-entity-id))
 
 
-(defn previous-entity 
+(defn previous-entity
   "Given and entity and a system ID this gives the previous entity in
   the entitiy list for that system."
   [entity-id system-id]
-  (state-get :entities entity-id :prevs system-id))
+  (state-get-in :entities entity-id :prevs system-id))
 
 (defn get-ent [id]
   "Given an entity ID, fetches the actual entity.  The player probably
@@ -169,15 +169,15 @@
   (fn [state]
     [(-> state :entities id) state]))
 
-(defn add-entity-to-system 
+(defn add-entity-to-system
   "Adds the entity to the given system.
   This is a low-level function, and it doesn't handle making sure that
   the components of the system are added to the entity."
-  [entity-id system-id]  
-  (state-do 
+  [entity-id system-id]
+  (state-do
    [:bind last-entity-in-system (last-element-of-system system-id)]
    (if (nil? last-entity-in-system)
-     (state-do 
+     (state-do
       (state-assoc-in [:systems system-id :first-entity-id] entity-id)
       (state-assoc-in [:systems system-id :last-entity-id] entity-id))
      (state-do
@@ -186,44 +186,44 @@
       (set-next-entity entity-id system-id nil)
       (state-assoc-in [:systems system-id :last-entity-id] entity-id)))))
 
-(defn entity-belongs-in-system? 
+(defn entity-belongs-in-system?
   "Returns true (into the state monad) when the entity belongs in the system."
   [entity-id system-id]
-  (state-do 
-   [:bind 
-    entity-components (state-get :entities entity-id :component-ids)
-    system-components (state-get :systems system-id :components)]
+  (state-do
+   [:bind
+    entity-components (state-get-in :entities entity-id :component-ids)
+    system-components (state-get-in :systems system-id :components)]
    (state-return system-components entity-components)))
 
-(defn remove-entity-from-system 
+(defn remove-entity-from-system
   "Removes the entity from the given system.
-   This is a low-level function and it doesn't handle removing the
+  This is a low-level function and it doesn't handle removing the
   components of the system from the entity."
   [entity-id system-id]
-  (state-do 
-   [:bind 
+  (state-do
+   [:bind
     head (first-element-of-system system-id)
     tail (last-element-of-system system-id)
     prev (previous-entity entity-id system-id)
     next (next-entity entity-id system-id)]
-   (cond 
-    (and (nil? prev) (nil? next)) 
-    (state-do 
+   (cond
+    (and (nil? prev) (nil? next))
+    (state-do
      (state-assoc-in [:systems system-id :first-entity-id] nil)
      (state-assoc-in [:systems system-id :last-entity-id] nil))
     (and (nil? prev) (not (nil? next)))
     ;; entity is the head of the system linked list
-    (state-do 
+    (state-do
      (state-assoc-in [:systems system-id :first-entity-id] next)
      (set-prev-entity next system-id nil))
     (and (not (nil? prev)) (nil? next))
     ;; entity is the tail of the system linked list
-    (state-do 
+    (state-do
      (state-assoc-in [:systems system-id :last-entity-id] prev)
      (set-next-entity prev system-id nil))
-    :otherwise 
-    ;; somewhere in the middle 
-    (state-do 
+    :otherwise
+    ;; somewhere in the middle
+    (state-do
      (set-next-entity prev system-id next)
      (set-prev-entity next system-id prev)))))
 
@@ -244,35 +244,35 @@
               new-entities (assoc entities id new-val)]
           (assoc state :entities new-entities))]))
 
-(defn get-ent "State function which returns the entity at ENT-ID"
-  [ent-id]
-  (state-do
-   [:bind entities (state-get :entities)]
-   (state-return (entities ent-id))))
+  (defn get-ent "State function which returns the entity at ENT-ID"
+    [ent-id]
+    (state-do
+     [:bind entities (state-get-in :entities)]
+     (state-return (entities ent-id))))
 
-(defn get-ent-component-ids 
+(defn get-ent-component-ids
   "State function which returns the component ids for the specified
   entity.  Useful for testing whether an entity belongs in a system."
   [ent-id]
-  (state-do 
-   [:bind entities (state-get :entities)]
+  (state-do
+   [:bind entities (state-get-in :entities)]
    (state-return (:component-ids (entities ent-id)))))
 
-(defn set-ent-component 
+(defn set-ent-component
   "Given a new value, set the component _value_ for the entity and
   component id to the new-state.  Used to update the state of an
   entity's component.  See also ASSOC-COMPONENT, DIP-COMPONENT
   "
   [ent-id component-id new-state]
-  (state-do 
+  (state-do
    (state-assoc-in [:entities ent-id :components component-id] new-state)))
 
-(defn get-ent-component 
+(defn get-ent-component
   "Gets the component value for component-id from the specified entity."
   [ent-id component-id]
-  (state-get :entities ent-id :components component-id))
+  (state-get-in :entities ent-id :components component-id))
 
-(defn on-ent-component 
+(defn on-ent-component
   "Call transform on the component denoted by component-id of the
   entity ent-id and return (into the state monad) the result.
 
@@ -283,7 +283,7 @@
    [:bind component (get-ent-component ent-id component-id)]
    (state-return (transform component))))
 
-(defn do-with-ent-component 
+(defn do-with-ent-component
   "Extract the component value indicated by component-id from ent-id,
   and then call block on the result, executing the returned
   state-function on the current state.
@@ -296,11 +296,11 @@
    [:bind component (get-ent-component ent-id component-id)]
    (block component)))
 
-(defn assoc-component 
+(defn assoc-component
   "For components which are maps, this allows you to operate ASSOC
   semantics directly on the component value."
   [ent-id component-id & args]
-  (state-do 
+  (state-do
    [:bind component (get-ent-component ent-id component-id)]
    (set-ent-component ent-id component-id (apply assoc component-id args))))
 
@@ -312,7 +312,7 @@
   If your transform function needs to side effect in the state monad,
   then use state-dip-component."
   [ent-id component-id transform]
-  (state-do 
+  (state-do
    [:bind component (get-ent-component ent-id component-id)]
    (set-ent-component ent-id component-id (transform component))))
 
@@ -324,31 +324,31 @@
   If your transform is a pure function with respect to the state
   monad, you can use dip-component."
   [ent-id component-id transform]
-  (state-do 
-   [:bind 
+  (state-do
+   [:bind
     component (get-ent-component ent-id component-id)
     result (transform component)]
    (set-ent-component ent-id component-id result)))
 
-(defn handle-systems-for-entity 
+(defn handle-systems-for-entity
   "Given an entity ID, this function iterates through the systems and
   adds the entity to systems which match the components of the entity."
-  [ent-id]  
-  (state-do 
+  [ent-id]
+  (state-do
    [:bind ent (get-ent ent-id)]
    [:let ent-component-ids (:component-ids ent)]
-   [:bind systems (state-get :systems)]
+   [:bind systems (state-get-in :systems)]
    (state-map
     (fn [system-key]
       (if (subset? (-> systems system-key :components) ent-component-ids)
-        (do 
-          
+        (do
+
           (add-entity-to-system ent-id system-key))
-        (do 
-          (state-return nil)))) 
+        (do
+          (state-return nil))))
     (keys systems))))
 
-(defn system-deltas 
+(defn system-deltas
   "Given a set of components and a new set of components, calculate
   which systems have a member ship change and how.  The result is an
   map whose keys are system ids and whose values are :enter | :exit
@@ -356,31 +356,31 @@
   the components are so updated, :exit means they will exit the
   system, and :no-change means nothing happens. "
   [old-components new-components]
-  (state-do 
-   [:bind systems (state-get :systems)]
+  (state-do
+   [:bind systems (state-get-in :systems)]
    (state-reduce (fn [acc system-id]
-                   (state-do 
-                    [:bind system-components (state-get :systems system-id :components)]
-                    [:let 
+                   (state-do
+                    [:bind system-components (state-get-in :systems system-id :components)]
+                    [:let
                      old-in (subset? system-components old-components)
                      new-in (subset? system-components new-components)]
-                    (state-return 
-                     (assoc acc system-id 
-                            (cond 
+                    (state-return
+                     (assoc acc system-id
+                            (cond
                              (= old-in new-in) :no-change
                              old-in :exiting
                              new-in :entering))))
                    ) (keys systems)
-                   {})))
+                     {})))
 
 (defn add-component-raw [entid component-id & args]
   "Given an ENTID, a COMPONENT-ID and ARGS to be passed to the
   component constructor, this function adds that component to the
-  entity.  
+  entity.
 
 Adding components to entities is fundamental the functionality of
 cljan, since it is how all entities define their behavior."
-  (state-if 
+  (state-if
    (component? component-id)
    (state-do
     [:bind component (apply make-component component-id args)]
@@ -391,42 +391,42 @@ cljan, since it is how all entities define their behavior."
     (set-ent entid (assoc ent
                      :component-ids (conj component-ids component-id)
                      :components (assoc components component-id component))))
-   (state-do 
-    [:bind components (state-get :components)]
+   (state-do
+    [:bind components (state-get-in :components)]
     (throw (Throwable. (format "Could not add component %s to entity %s (valid components are: %s)." component-id entid (keys components)))))))
 
-(defn get-entry-hook 
+(defn get-entry-hook
   "A system may have a function which runs when an entity enters the
   system.  Thisxo function retrieves that function or nil if no such
   exists."
   [system-id]
-  (state-get :systems system-id :enter))
+  (state-get-in :systems system-id :enter))
 
-(defn get-exit-hook 
+(defn get-exit-hook
   "A system may have a function which runs when an entity leaves the
   system.  This function retrieves that function or nil if no such
   exists."
   [system-id]
-  (state-get :systems system-id :exit))
+  (state-get-in :systems system-id :exit))
 
-(defn get-every 
+(defn get-every
   "A system may have a `default` behavior, its `every` function.  This
   function retrieves that function if it exists or nil is returned, if
   no such function is present."
   [system-id]
-  (state-get :systems system-id :every))
+  (state-get-in :systems system-id :every))
 
-(defn get-pre-hook 
+(defn get-pre-hook
   "A system may have a hook to run before the every function is
   executed.  This function fetches that hook, or nil if none exists."
   [system-id]
-  (state-get :systems system-id :pre))
+  (state-get-in :systems system-id :pre))
 
-(defn get-post-hook 
+(defn get-post-hook
   "A system may have a hook to run after the every function is
   executed.  This function fetches that hook, or nil if none exists."
   [system-id]
-  (state-get :systems system-id :post))
+  (state-get-in :systems system-id :post))
 
 
 (declare system-components)
@@ -434,22 +434,22 @@ cljan, since it is how all entities define their behavior."
 (defn maybe-invoke-entry-hook
   "Invokes the entry function for a system on an entity, if the entry function exists."
   [ent-id system-id]
-  (state-do 
-   [:bind 
+  (state-do
+   [:bind
     hook (get-entry-hook system-id)
     components (system-components system-id)]
    (if hook (call-with-components ent-id components hook) (state-return ent-id))))
 
-(defn maybe-invoke-exit-hook 
+(defn maybe-invoke-exit-hook
   "Invokes the exit function for a system on an entity, if the entry function exists."
   [ent-id system-id]
-  (state-do 
-   [:bind 
+  (state-do
+   [:bind
     hook (get-exit-hook system-id)
     components (system-components system-id)]
    (if hook (call-with-components ent-id components hook) (state-return ent-id))))
 
-(defn maybe-invoke-pre-hook 
+(defn maybe-invoke-pre-hook
   "Invokes the pre hook of a system.  The pre hook of a system is
   invoked before the every hook of a system when the execute-system
   function is called."
@@ -458,7 +458,7 @@ cljan, since it is how all entities define their behavior."
    [:bind hook (get-pre-hook system-id)]
    (if hook (hook) (state-return nil))))
 
-(defn maybe-invoke-post-hook 
+(defn maybe-invoke-post-hook
   "Invokes the post hook of a system.  The post hook of a system is
   invoked before the every hook of a system when the execute-system
   function is called."
@@ -476,54 +476,54 @@ cljan, since it is how all entities define their behavior."
    [:bind deltas (system-deltas old-components new-components)]
    (apply add-component-raw ent-id component-id args)
    (state-map (fn [system-id]
-                (state-do 
+                (state-do
                  [:let val (system-id deltas)]
-                 (case val 
-                   :entering 
-                   (state-do 
+                 (case val
+                   :entering
+                   (state-do
                     (add-entity-to-system ent-id system-id)
                     (maybe-invoke-entry-hook ent-id system-id))
-                   :exiting 
-                   (state-do 
+                   :exiting
+                   (state-do
                     (maybe-invoke-exit-hook ent-id system-id)
                     (remove-entity-from-system ent-id system-id))
                    :no-change (state-return nil)))) (keys deltas))))
 
-(defn system-for-each 
+(defn system-for-each
   "Call the function STATE-FUN on each member of the system SYSTEM-ID,
   for side effects in the state monad."
   [system-id state-fun]
-  (state-do 
-   [:bind 
-    head (first-element-of-system system-id)    
+  (state-do
+   [:bind
+    head (first-element-of-system system-id)
     state extract-state]
    (loop [current head
           state state]
-     (if (nil? current) (state-do 
+     (if (nil? current) (state-do
                          (set-state state)
                          (state-return nil))
-         (let [[next new-state] 
-               ((state-do 
+         (let [[next new-state]
+               ((state-do
                  [:bind next-before (next-entity current system-id)]
                  (state-fun current)
                  [:bind next-after (next-entity current system-id)]
-                 (state-return (or next-after next-before))) 
+                 (state-return (or next-after next-before)))
                 state)]
            (recur next new-state))))))
 
-(defn system-reduce 
+(defn system-reduce
   "Call the reduction function STATE-FUN-REDUCER on each member of the
   system SYSTEM-ID and the previous value of the reduction function,
   finally, return into the state monad the result of the reduction.
-  
+
   STATE-FUN-REDUCER must have the type:
 
   PREVIOUS-VALUE ENT -> (STATE -> [RESULT, STATE])
 
   "
   [system-id state-reducer init]
-  (state-do 
-   [:bind 
+  (state-do
+   [:bind
     head (first-element-of-system system-id)
     state extract-state]
    (loop [current head
@@ -531,13 +531,13 @@ cljan, since it is how all entities define their behavior."
           state state]
      (if (nil? current) (state-do (set-state state)
                                   (state-return acc))
-         (let [[[new-acc next-ent] new-state] 
-               ((state-do 
-                 [:bind 
+         (let [[[new-acc next-ent] new-state]
+               ((state-do
+                 [:bind
                   next-ent-before-reducer (next-entity current system-id)
                   new-acc (state-reducer acc current)
                   next-ent (or (next-entity current system-id) next-ent-before-reducer)]
-                 (state-return [new-acc next-ent])) 
+                 (state-return [new-acc next-ent]))
                 state)]
            (recur next-ent new-acc new-state))))))
 
@@ -545,37 +545,37 @@ cljan, since it is how all entities define their behavior."
 (declare call-with-components)
 (declare call-with-accumulator-and-components)
 
-(defn system-reduce-with-components 
+(defn system-reduce-with-components
   "Call the reduction function STATE-FUN-REDUCER on each member of the
   system SYSTEM-ID and the previous reduction value, beginning with INIT.
 
   The reduction function should have the signature:
 
   PREVIOUS-VALUE COMPONENT1 ... COMPONENTN ENT -> (STATE -> [RESULT, STATE])
-  
+
   "
   [system-id state-reducer init]
-  (state-do 
+  (state-do
    [:bind components (system-components system-id)]
-   (system-reduce system-id 
+   (system-reduce system-id
                   (fn [acc ent]
                     (call-with-accumulator-and-components acc ent components state-reducer))
                   init)))
 
-(defn system-map 
+(defn system-map
   "Map a curriend state function F across all the entities in a
   system, provided as entity IDs.  F must accept the current entity
   and return a state function, which is executed against the state."
   [system-id f]
-  (system-reduce 
-   system-id 
+  (system-reduce
+   system-id
    (fn [acc item]
-     (state-do 
+     (state-do
       [:bind res (f item)]
-      (state-return (conj acc res)))) 
+      (state-return (conj acc res))))
    []))
 
-(defn system-map-with-components 
+(defn system-map-with-components
   "Map a curried state-function expecting the components of SYSTEM-ID
   across the entities in the system, collecting the values and
   side-effecting the state as implied in F.  F must take a number of
@@ -583,13 +583,13 @@ cljan, since it is how all entities define their behavior."
   components are passed in as they were ordered in the system
   definition."
   [system-id f]
-  (state-do 
+  (state-do
    [:bind components (system-components system-id)]
-   (system-map system-id 
+   (system-map system-id
                (fn [ent]
                  (call-with-components ent components f)))))
 
-(defn system-entities-snapshot 
+(defn system-entities-snapshot
   "Return the list of entities (as entity ids) "
   [system-id]
   (system-reduce system-id
@@ -608,31 +608,31 @@ cljan, since it is how all entities define their behavior."
                        :components
                        (dissoc component-id))))
 
-(defn remove-component-raw 
+(defn remove-component-raw
   "Removes a component from an entity without updating any information
   about the systems it may or may not now be in."
   [entid component-id]
-  (state-do 
+  (state-do
    [:bind ent (get-ent entid)]
    (set-ent (remove-component-from-entity ent component-id))))
 
-(defn get-components 
+(defn get-components
   "Fetch, as a list, all the components for ENT-ID listed in COMPONENT-IDS."
   [ent-id component-ids]
   (state-map (fn [component-id]
                (state-do
-                [:bind entities (state-get :entities)]
+                [:bind entities (state-get-in :entities)]
                 (state-return (component-id (:components (entities ent-id))))))
              component-ids))
 
-(defn call-with-components 
+(defn call-with-components
   "F should be a function of (+ 1 (count component-ids)) arguments
   which is called with the component ids and the entity.  Useful to
   quickly call a function on an entity with components unpacked."
   [ent-id component-ids f]
   (state-bind (get-components ent-id component-ids) #(apply f (conj % ent-id))))
 
-(defn call-with-accumulator-and-components 
+(defn call-with-accumulator-and-components
   "F should be a function of (+ 2 (count component-ids)) arguments
   which is called with an accumulator, the component ids and the entity.  Useful to
   quickly call a function on an entity with components unpacked.
@@ -640,27 +640,27 @@ cljan, since it is how all entities define their behavior."
   [acc ent-id component-ids f]
   (state-bind (get-components ent-id component-ids) #(apply f acc (conj % ent-id))))
 
-(defn system-components 
+(defn system-components
   "Get the set of components which makes up a system.  Can be used
   with CALL-WITH-COMPONENTS to quickly operate on the components of a
   system for an entity."
   [system-id]
-  (state-get :systems system-id :components-order))
+  (state-get-in :systems system-id :components-order))
 
 (defn call-on-system
   "Given a function F which takes an argument for each component of
   the system and one more for the entity itself, call F for all
   entities in the system with the appropriate components."
   [system-id f]
-  (state-do 
+  (state-do
    [:bind components (system-components system-id)]
    (system-for-each system-id #(call-with-components % components f))))
 
-(defn execute-system 
+(defn execute-system
   "CALL-ON-SYSTEM which simply invokes the EVERY function of the
   system, if such exists."
   [system-id]
-  (state-do 
+  (state-do
    (maybe-invoke-pre-hook system-id)
    (state-bind (get-every system-id)
                #(call-on-system system-id %))
@@ -672,39 +672,37 @@ cljan, since it is how all entities define their behavior."
   example, making an entity mortal by adding health."
   [ent-id component-id]
   (state-do
-      [:bind old-components (get-ent-component-ids ent-id)]
-      [:let new-components (difference old-components #{component-id})]
-      [:bind deltas (system-deltas old-components new-components)]
-      (state-map (fn [system-id]
-                (state-do 
+   [:bind old-components (get-ent-component-ids ent-id)]
+   [:let new-components (difference old-components #{component-id})]
+   [:bind deltas (system-deltas old-components new-components)]
+   (state-map (fn [system-id]
+                (state-do
                  [:let val (system-id deltas)]
-                 (case val 
-                   :entering 
-                   (state-do 
+                 (case val
+                   :entering
+                   (state-do
                     (add-entity-to-system ent-id system-id)
                     (maybe-invoke-entry-hook ent-id system-id))
-                   :exiting 
-                   (state-do 
+                   :exiting
+                   (state-do
                     (maybe-invoke-exit-hook ent-id system-id)
                     (remove-entity-from-system ent-id system-id))
                    :no-change (state-return nil)))) (keys deltas))))
 
 (defn delete [ent-id]
   "Removes a given entity ID from the current state."
-  (state-do 
-   [:bind 
+  (state-do
+   [:bind
     old-components (get-ent-component-ids ent-id)
     deltas (system-deltas old-components #{})]
    (state-map (fn [system-id]
-                (state-do 
+                (state-do
                  [:let val (system-id deltas)]
-                 (case val 
-                   :exiting 
-                   (state-do 
+                 (case val
+                   :exiting
+                   (state-do
                     (maybe-invoke-exit-hook ent-id system-id)
                     (remove-entity-from-system ent-id system-id))
                    :no-change (state-return nil)))) (keys deltas))
-   (state-dip [:entities] 
+   (state-dip [:entities]
               #(dissoc % ent-id))))
-
-
