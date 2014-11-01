@@ -83,6 +83,14 @@
     [(get-in state keys)
      state]))
 
+(ann state-get
+     (All [state]
+          [Any * -> [state -> (HVec [Any state])]]))
+(defn state-get [& keys]
+  (fn [state]
+    [(get-in state keys)
+     state]))
+
 (ann extract-state
      (All [state]
           [state -> (HVec [state state])]))
@@ -117,6 +125,20 @@
          (recur new-result
                 new-state
                 rest))))))
+
+(defn state-filter 
+  "Using F, a predicate which returns a state-function which
+  monadically returns true or false, filter the sequence SEQ."
+  [f collection]
+  (state-reduce 
+   (fn [output element]
+     (state-do 
+      [:bind b (f element)]
+      (state-return 
+       (if b (conj output element)
+           output))))
+   collection
+   []))
 
 (ann state-for-each
      [MonadicFunctionArity1
@@ -175,3 +197,24 @@
   (state-do
    [:bind v (apply state-get-in location)]
    (state-assoc-in location (f v))))
+
+(defn state-call 
+  "Given F and a set of values in the state-monad apply F, which
+  should be a function producing a state function, to the unwrapped
+  values implied by the subsequent arguments."
+  [f & rest]
+  (state-do 
+   [:bind unwrapped-valued (state-map identity rest)]
+   (apply f unwrapped-valued)))
+
+(defn lift1 [f] (fn [a] (state-call (fn [a] (state-return (f a))) a)))
+(defn lift2 [f] (fn [a b] (state-call (fn [a b] (state-return (f a b))) a b)))
+(defn lift3 [f] (fn [a b c] (state-call (fn [a b c] (state-return (f a b c))) a b c)))
+(defn lift4 [f] (fn [a b c d] (state-call (fn [a b c d] (state-return (f a b c d))) a b c d)))
+(defn lift5 [f] (fn [a b c d e] (state-call (fn [a b c d e] (state-return (f a b c d e))) a b c d e)))
+(defn lift6 [f] (fn [a b c d e f] (state-call (fn [a b c d e f] (state-return (f a b c d e f))) a b c d e f)))
+(defn lift7 [f] (fn [a b c d e f g] (state-call (fn [a b c d e f g] (state-return (f a b c d e f g))) a b c d e f g)))
+(defn lift8 [f] (fn [a b c d e f g h] (state-call (fn [a b c d e f g h] (state-return (f a b c d e f g h))) a b c d e f g h)))
+(defn lift9 [f] (fn [a b c d e f g h i] (state-call (fn [a b c d e f g h i] (state-return (f a b c d e f g h i))) a b c d e f g h i)))
+(defn lift10 [f] (fn [a b c d e f g h i j] (state-call (fn [a b c d e f g h i j] (state-return (f a b c d e f g h i j))) a b c d e f g h i j)))
+

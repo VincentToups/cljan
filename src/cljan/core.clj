@@ -50,6 +50,11 @@
        (let [components (:components state)]
          [name (assoc state :components (assoc components name {:name name :maker maker}))]))))
 
+(defn tag 
+  "Creates a component with the given NAME but which contains no data."
+  [name]
+  (component name (fn [] true)))
+
 (defn component? [id]
   "Returns TRUE when ID is a component id in the cljan universe STATE."
   (fn [state]
@@ -105,11 +110,13 @@
   Systems are the basis for behaviors run by the game.
 
   Each component must exist."
-  [name components behaviors]
-  (state-do
-   [:bind result (apply components? components)]
-   (if result (state-do (system-raw name components behaviors))
-       (throw (Throwable. "System refered to components that don't exist.")))))
+  ([name components behaviors]
+     (state-do
+      [:bind result (apply components? components)]
+      (if result (state-do (system-raw name components behaviors))
+          (throw (Throwable. "System refered to components that don't exist.")))))
+  ([name components]
+     (system name components {})))
 
 (defn entity-raw
   "Creates an empty entity. An entity is a bag of components. The point of
@@ -540,6 +547,19 @@ cljan, since it is how all entities define their behavior."
                  (state-return [new-acc next-ent]))
                 state)]
            (recur next-ent new-acc new-state))))))
+
+(defn system-filter
+  "Given a system designator and a filter function (in the state
+  monad) return just the entities in the system which cause the
+  function to return true."
+  [system-id f]
+  (system-reduce
+   system-id
+   (fn [acc it]
+     (state-do
+      [:bind b (f it)]
+      (state-return (if b (conj acc it) acc))))
+   []))
 
 (declare system-components)
 (declare call-with-components)
